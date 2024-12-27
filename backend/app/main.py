@@ -1,97 +1,160 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
-import whisper
-import asyncio
-import json
-from typing import Optional
-import sounddevice as sd
-import numpy as np
+from sqlalchemy.orm import Session
+from typing import Optional, List
+import os
+from datetime import datetime
+from pydantic import BaseModel
+
+from . import models
+from . import schemas
+from .database import SessionLocal, engine, get_db
+from .services.summarization_service import summarization_service
+from .services.transcription_service import transcription_service
+from .services.audio_service import audio_service
 
 app = FastAPI()
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize Whisper model
-model = whisper.load_model("base")
+# Create database tables
+models.Base.metadata.create_all(bind=engine)
 
-class AudioTranscriber:
-    def __init__(self):
-        self.stream = None
-        self.is_recording = False
-        self.buffer = []
-        
-    async def start_recording(self, sample_rate=16000):
-        self.is_recording = True
-        self.stream = sd.InputStream(
-            samplerate=sample_rate,
-            channels=1,
-            dtype=np.float32,
-            callback=self.audio_callback
-        )
-        self.stream.start()
-        
-    def audio_callback(self, indata, frames, time, status):
-        if self.is_recording:
-            self.buffer.append(indata.copy())
-            
-    def stop_recording(self):
-        if self.stream:
-            self.stream.stop()
-            self.stream.close()
-        self.is_recording = False
-        
-    def get_audio_data(self):
-        if not self.buffer:
-            return None
-        audio_data = np.concatenate(self.buffer)
-        self.buffer = []
-        return audio_data
+class TextInput(BaseModel):
+    text: str
 
-transcriber = AudioTranscriber()
+@app.get("/health")
+def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
 
-@app.websocket("/ws/transcribe")
-async def transcribe_audio(websocket: WebSocket):
-    await websocket.accept()
-    
+@app.post("/recording/start")
+def start_recording(db: Session = Depends(get_db)):
+    """Start recording audio."""
     try:
-        await transcriber.start_recording()
+        session_id = audio_service.start_recording()
         
-        while True:
-            # Process audio in chunks
-            await asyncio.sleep(2.0)  # Process every 2 seconds
-            audio_data = transcriber.get_audio_data()
-            
-            if audio_data is not None:
-                # Convert audio data to format expected by Whisper
-                result = model.transcribe(audio_data)
-                
-                if result["text"]:
-                    await websocket.send_json({
-                        "type": "transcription",
-                        "text": result["text"]
-                    })
-                    
+        # Create a new meeting record
+        new_meeting = models.Meeting(
+            title=f"Meeting {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            status="recording",
+            audio_path=os.path.join(audio_service.recording_dir, f"{session_id}.wav")
+        )
+        db.add(new_meeting)
+        db.commit()
+        db.refresh(new_meeting)
+        
+        return {"session_id": session_id, "meeting_id": new_meeting.id, "message": "Recording started"}
     except Exception as e:
-        print(f"Error in WebSocket connection: {e}")
-    finally:
-        transcriber.stop_recording()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/recording/stop/{session_id}")
+async def stop_recording(session_id: str, db: Session = Depends(get_db)):
+    """Stop recording and save the audio data."""
+    try:
+        # Find the meeting record
+        meeting = db.query(models.Meeting).filter(
+            models.Meeting.audio_path.like(f"%{session_id}.wav")
+        ).first()
+        
+        if not meeting:
+            raise ValueError(f"No meeting found for recording session {session_id}")
+            
+        # Stop the recording
+        audio_service.stop_recording(session_id)
+        
+        # Update meeting status
+        meeting.status = "recorded"
+        db.commit()
+        
+        return {"status": "stopped", "meeting_id": meeting.id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Error stopping recording: {str(e)}")  # Add logging
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/transcribe")
+async def transcribe_audio_file(file: UploadFile = File(...)):
+    """Transcribe an uploaded audio file."""
+    try:
+        # Save the uploaded file temporarily
+        temp_path = f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+        try:
+            # Write the file content
+            with open(temp_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            
+            # Transcribe the audio
+            transcription = transcription_service.transcribe_file(temp_path)
+            return {"transcription": transcription}
+            
+        finally:
+            # Clean up
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/transcribe/{session_id}")
+async def get_session_transcription(session_id: str):
+    """Get transcription for a recording session."""
+    try:
+        # Get the path to the audio file
+        audio_path = audio_service.get_recording_path(session_id)
+        
+        # Transcribe the audio
+        transcription = transcription_service.transcribe_file(audio_path)
+        return {"transcription": transcription}
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Error in transcription: {str(e)}")  # Add logging
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize")
-async def summarize_transcript(transcript: str):
-    # TODO: Implement summarization using Qwen/GPT
-    # For now, return a mock summary
-    return {
-        "overview": "Meeting summary will be generated here",
-        "key_points": ["Point 1", "Point 2"],
-        "action_items": ["Action 1", "Action 2"]
-    }
+def summarize_text(text_input: TextInput):
+    """Generate a summary of the provided text."""
+    try:
+        summary = summarization_service.summarize(text_input.text)
+        if not summary:
+            raise HTTPException(status_code=400, detail="Failed to generate summary")
+        return {"summary": summary}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/meetings", response_model=schemas.Meeting)
+def create_meeting(meeting: schemas.MeetingCreate, db: Session = Depends(get_db)):
+    """Create a new meeting record."""
+    db_meeting = models.Meeting(**meeting.dict())
+    db.add(db_meeting)
+    db.commit()
+    db.refresh(db_meeting)
+    return db_meeting
+
+@app.get("/meetings/{meeting_id}", response_model=schemas.Meeting)
+def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
+    """Get a specific meeting by ID."""
+    meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    return meeting
+
+@app.get("/meetings", response_model=List[schemas.Meeting])
+def list_meetings(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    """List all meetings with pagination."""
+    meetings = db.query(models.Meeting).offset(skip).limit(limit).all()
+    return meetings
 
 if __name__ == "__main__":
     import uvicorn
