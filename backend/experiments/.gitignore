@@ -1,0 +1,18 @@
+# Ignore screenpipe directory
+screenpipe/
+
+# Rust
+**/target/
+**/*.rs.bk
+**/Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+
+# System files
+.DS_Store
+**/.DS_Store
+
+# Audio files
+**/*.wav
