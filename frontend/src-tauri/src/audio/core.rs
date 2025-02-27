@@ -113,88 +113,89 @@ pub fn parse_audio_device(name: &str) -> Result<AudioDevice> {
     AudioDevice::from_name(name)
 }
 
-pub async fn get_device_and_config(
-    audio_device: &AudioDevice,
-) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    let host = cpal::default_host();
-
-    let is_output_device = audio_device.device_type == DeviceType::Output;
-    let is_display = audio_device.to_string().contains("Display");
-
-    let cpal_audio_device = if audio_device.to_string() == "default" {
-        match audio_device.device_type {
-            DeviceType::Input => host.default_input_device(),
-            DeviceType::Output => host.default_output_device(),
-        }
-    } else {
-        let mut devices = match audio_device.device_type {
-            DeviceType::Input => host.input_devices()?,
-            DeviceType::Output => host.output_devices()?,
-        };
-
-        #[cfg(target_os = "macos")]
-        {
-            if is_output_device {
-                if let Ok(screen_capture_host) = cpal::host_from_id(cpal::HostId::ScreenCaptureKit)
-                {
-                    devices = screen_capture_host.input_devices()?;
-                }
+// Platform-specific audio device configurations
+#[cfg(target_os = "windows")]
+fn configure_windows_audio(host: &cpal::Host) -> Result<Vec<AudioDevice>> {
+    let mut devices = Vec::new();
+    
+    // Get WASAPI devices
+    if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+        // Add output devices (including loopback)
+        for device in wasapi_host.output_devices()? {
+            if let Ok(name) = device.name() {
+                devices.push(AudioDevice::new(name, DeviceType::Output));
             }
         }
-
-        devices.find(|x| {
-            x.name()
-                .map(|y| {
-                    y == audio_device
-                        .to_string()
-                        .replace(" (input)", "")
-                        .replace(" (output)", "")
-                        .trim()
-                })
-                .unwrap_or(false)
-        })
     }
-    .ok_or_else(|| anyhow!("Audio device not found"))?;
-
-    // if output device and windows, using output config
-    let config = if is_output_device && !is_display {
-        cpal_audio_device.default_output_config()?
-    } else {
-        cpal_audio_device.default_input_config()?
-    };
-    Ok((cpal_audio_device, config))
-}
-
-
-pub async fn list_audio_devices() -> Result<Vec<AudioDevice>> {
-    let host = cpal::default_host();
-    let mut devices = Vec::new();
-
+    
+    // Add regular input devices
     for device in host.input_devices()? {
         if let Ok(name) = device.name() {
             devices.push(AudioDevice::new(name, DeviceType::Input));
         }
     }
+    
+    Ok(devices)
+}
 
-    // Filter function to exclude macOS speakers and AirPods for output devices
-    fn should_include_output_device(name: &str) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            !name.to_lowercase().contains("speakers") && !name.to_lowercase().contains("airpods")
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            // Avoid "unused variable" warning in non-macOS systems
-            let _ = name;
-            true
+#[cfg(target_os = "linux")]
+fn configure_linux_audio(host: &cpal::Host) -> Result<Vec<AudioDevice>> {
+    let mut devices = Vec::new();
+    
+    // Add input devices
+    for device in host.input_devices()? {
+        if let Ok(name) = device.name() {
+            devices.push(AudioDevice::new(name, DeviceType::Input));
         }
     }
+    
+    // Add PulseAudio monitor sources for system audio
+    if let Ok(pulse_host) = cpal::host_from_id(cpal::HostId::Pulse) {
+        for device in pulse_host.input_devices()? {
+            if let Ok(name) = device.name() {
+                // Check if it's a monitor source
+                if name.contains("monitor") {
+                    devices.push(AudioDevice::new(
+                        format!("{} (System Audio)", name),
+                        DeviceType::Output
+                    ));
+                }
+            }
+        }
+    }
+    
+    Ok(devices)
+}
 
-    // macos hack using screen capture kit for output devices - does not work well
+pub async fn list_audio_devices() -> Result<Vec<AudioDevice>> {
+    let host = cpal::default_host();
+    let mut devices = Vec::new();
+
+    // Platform-specific device enumeration
+    #[cfg(target_os = "windows")]
+    {
+        devices = configure_windows_audio(&host)?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        devices = configure_linux_audio(&host)?;
+    }
+
     #[cfg(target_os = "macos")]
     {
-        // !HACK macos is supposed to use special macos feature "display capture"
-        // ! see https://github.com/RustAudio/cpal/pull/894
+        // Existing macOS implementation
+        for device in host.input_devices()? {
+            if let Ok(name) = device.name() {
+                devices.push(AudioDevice::new(name, DeviceType::Input));
+            }
+        }
+
+        // Filter function to exclude macOS speakers and AirPods for output devices
+        fn should_include_output_device(name: &str) -> bool {
+            !name.to_lowercase().contains("speakers") && !name.to_lowercase().contains("airpods")
+        }
+
         if let Ok(host) = cpal::host_from_id(cpal::HostId::ScreenCaptureKit) {
             for device in host.input_devices()? {
                 if let Ok(name) = device.name() {
@@ -204,25 +205,24 @@ pub async fn list_audio_devices() -> Result<Vec<AudioDevice>> {
                 }
             }
         }
-    }
 
-    // add default output device - on macos think of custom virtual devices
-    for device in host.output_devices()? {
-        if let Ok(name) = device.name() {
-            if should_include_output_device(&name) {
-                devices.push(AudioDevice::new(name, DeviceType::Output));
+        for device in host.output_devices()? {
+            if let Ok(name) = device.name() {
+                if should_include_output_device(&name) {
+                    devices.push(AudioDevice::new(name, DeviceType::Output));
+                }
             }
         }
     }
 
-    // last, add devices that are listed in .devices() which are not already in the devices vector
-    let other_devices = host.devices().unwrap();
-    for device in other_devices {
-        if !devices.iter().any(|d| d.name == device.name().unwrap())
-            && should_include_output_device(&device.name().unwrap())
-        {
-            // TODO: not sure if it can be input, usually aggregate or multi output
-            devices.push(AudioDevice::new(device.name().unwrap(), DeviceType::Output));
+    // Add any additional devices from the default host
+    if let Ok(other_devices) = host.devices() {
+        for device in other_devices {
+            if let Ok(name) = device.name() {
+                if !devices.iter().any(|d| d.name == name) {
+                    devices.push(AudioDevice::new(name, DeviceType::Output));
+                }
+            }
         }
     }
 
@@ -233,10 +233,10 @@ pub fn default_input_device() -> Result<AudioDevice> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
-        .ok_or(anyhow!("No default input device detected"))?;
+        .ok_or_else(|| anyhow!("No default input device found"))?;
     Ok(AudioDevice::new(device.name()?, DeviceType::Input))
 }
-// this should be optional ?
+
 pub fn default_output_device() -> Result<AudioDevice> {
     #[cfg(target_os = "macos")]
     {
@@ -530,4 +530,83 @@ impl AudioStream {
 
         Ok(())
     }
+}
+
+pub async fn get_device_and_config(
+    audio_device: &AudioDevice,
+) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
+    let host = cpal::default_host();
+    let is_output_device = audio_device.device_type == DeviceType::Output;
+    let is_display = audio_device.to_string().contains("Display");
+
+    let cpal_audio_device = if audio_device.to_string() == "default" {
+        match audio_device.device_type {
+            DeviceType::Input => host.default_input_device(),
+            DeviceType::Output => host.default_output_device(),
+        }
+    } else {
+        let mut devices = match audio_device.device_type {
+            DeviceType::Input => host.input_devices()?,
+            DeviceType::Output => host.output_devices()?,
+        };
+
+        #[cfg(target_os = "macos")]
+        {
+            if is_output_device {
+                if let Ok(screen_capture_host) = cpal::host_from_id(cpal::HostId::ScreenCaptureKit) {
+                    devices = screen_capture_host.input_devices()?;
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if is_output_device {
+                if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+                    devices = wasapi_host.output_devices()?;
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            if is_output_device {
+                if let Ok(pulse_host) = cpal::host_from_id(cpal::HostId::Pulse) {
+                    devices = pulse_host.input_devices()?;
+                }
+            }
+        }
+
+        devices.find(|x| {
+            x.name()
+                .map(|y| {
+                    y == audio_device
+                        .to_string()
+                        .replace(" (input)", "")
+                        .replace(" (output)", "")
+                        .trim()
+                })
+                .unwrap_or(false)
+        })
+    }
+    .ok_or_else(|| anyhow!("Audio device not found"))?;
+
+    // Configure stream based on platform and device type
+    let config = match () {
+        #[cfg(target_os = "windows")]
+        () if is_output_device => cpal_audio_device.default_output_config()?,
+        
+        #[cfg(target_os = "linux")]
+        () if is_output_device => cpal_audio_device.default_input_config()?, // Use input config for PulseAudio monitors
+        
+        _ => {
+            if is_output_device && !is_display {
+                cpal_audio_device.default_output_config()?
+            } else {
+                cpal_audio_device.default_input_config()?
+            }
+        }
+    };
+
+    Ok((cpal_audio_device, config))
 }
