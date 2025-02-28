@@ -1,0 +1,13 @@
+@echo off
+echo Cleaning cargo build...
+cargo clean
+
+echo Cleaning npm dependencies...
+rd /s /q node_modules
+del /f /q package-lock.json
+
+echo Installing npm dependencies...
+npm install
+
+echo Building the project...
+npm run tauri dev
