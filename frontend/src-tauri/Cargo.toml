@@ -76,6 +76,8 @@ ffmpeg-sidecar = { git = "https://github.com/nathanbabcock/ffmpeg-sidecar", bran
 
 # Common Tauri configuration
 tauri = { version = "2.0.6", features = [ "macos-private-api", "protocol-asset"] }
+tauri-plugin-fs = "2.2.0"
+tauri-plugin-dialog = "2.0.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2.0.6", features = ["protocol-asset", "macos-private-api"] }
@@ -85,8 +87,6 @@ tauri-plugin-log = { version = "2.0.0-rc", features = ["colored"] }
 anyhow = "1.0"
 time = { version = "0.3", features = ["formatting"] }
 reqwest = { version = "0.11", features = ["multipart", "json"] }
-tauri-plugin-fs = "2.2.0"
-tauri-plugin-dialog = "2.0.0"
 
 [dev-dependencies]
 tempfile = "3.3.0"
