@@ -7,7 +7,7 @@ rd /s /q node_modules
 del /f /q package-lock.json
 
 echo Installing npm dependencies...
-npm install
+pnpm install
 
 echo Building the project...
-npm run tauri build
+pnpm run tauri build
