@@ -454,36 +454,7 @@ impl AudioStream {
                     ) {
                         Ok(stream) => stream,
                         Err(e) => {
-                            error!("Failed to build input stream with F32 format: {}", e);
-                            
-                            #[cfg(target_os = "windows")]
-                            {
-                                // On Windows, try with a different sample format as fallback
-                                warn!("Attempting fallback with I16 format on Windows...");
-                                match cpal_audio_device.build_input_stream(
-                                    &config.into(),
-                                    move |data: &[i16], _: &_| {
-                                        let mono = audio_to_mono(bytemuck::cast_slice(data), channels);
-                                        debug!("Received audio chunk: {} samples", mono.len());
-                                        if let Err(e) = tx_clone.send(mono) {
-                                            error!("Failed to send audio data: {}", e);
-                                        }
-                                    },
-                                    error_callback.clone(),
-                                    None,
-                                ) {
-                                    Ok(stream) => {
-                                        info!("Successfully created fallback I16 stream");
-                                        stream
-                                    },
-                                    Err(e) => {
-                                        error!("Fallback stream creation also failed: {}", e);
-                                        return;
-                                    }
-                                }
-                            }
-                            
-                            #[cfg(not(target_os = "windows"))]
+                            error!("Failed to build input stream: {}", e);
                             return;
                         }
                     }
