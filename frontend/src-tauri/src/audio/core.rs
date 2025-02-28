@@ -121,17 +121,44 @@ fn configure_windows_audio(host: &cpal::Host) -> Result<Vec<AudioDevice>> {
     // Get WASAPI devices
     if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
         // Add output devices (including loopback)
-        for device in wasapi_host.output_devices()? {
-            if let Ok(name) = device.name() {
-                devices.push(AudioDevice::new(name, DeviceType::Output));
+        if let Ok(output_devices) = wasapi_host.output_devices() {
+            for device in output_devices {
+                if let Ok(name) = device.name() {
+                    // For Windows, we need to mark output devices specifically for loopback
+                    devices.push(AudioDevice::new(format!("{} (output)", name), DeviceType::Output));
+                }
+            }
+        }
+
+        // Add input devices from WASAPI
+        if let Ok(input_devices) = wasapi_host.input_devices() {
+            for device in input_devices {
+                if let Ok(name) = device.name() {
+                    devices.push(AudioDevice::new(format!("{} (input)", name), DeviceType::Input));
+                }
             }
         }
     }
     
-    // Add regular input devices
-    for device in host.input_devices()? {
-        if let Ok(name) = device.name() {
-            devices.push(AudioDevice::new(name, DeviceType::Input));
+    // If WASAPI failed, try default host as fallback
+    if devices.is_empty() {
+        debug!("WASAPI device enumeration failed, falling back to default host");
+        // Add regular input devices
+        if let Ok(input_devices) = host.input_devices() {
+            for device in input_devices {
+                if let Ok(name) = device.name() {
+                    devices.push(AudioDevice::new(format!("{} (input)", name), DeviceType::Input));
+                }
+            }
+        }
+
+        // Add output devices
+        if let Ok(output_devices) = host.output_devices() {
+            for device in output_devices {
+                if let Ok(name) = device.name() {
+                    devices.push(AudioDevice::new(format!("{} (output)", name), DeviceType::Output));
+                }
+            }
         }
     }
     
@@ -255,7 +282,25 @@ pub fn default_output_device() -> Result<AudioDevice> {
         return Ok(AudioDevice::new(device.name()?, DeviceType::Output));
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        // Try WASAPI host first for Windows
+        if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+            if let Some(device) = wasapi_host.default_output_device() {
+                if let Ok(name) = device.name() {
+                    return Ok(AudioDevice::new(name, DeviceType::Output));
+                }
+            }
+        }
+        // Fallback to default host if WASAPI fails
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| anyhow!("No default output device found"))?;
+        return Ok(AudioDevice::new(device.name()?, DeviceType::Output));
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let host = cpal::default_host();
         let device = host
@@ -317,14 +362,30 @@ impl AudioStream {
         info!("Initializing audio stream for device: {}", device.to_string());
         let (tx, _) = broadcast::channel::<Vec<f32>>(1000);
         let tx_clone = tx.clone();
-        let (cpal_audio_device, config) = get_device_and_config(&device).await?;
         
-        // Verify we can actually get input config
-        match cpal_audio_device.default_input_config() {
-            Ok(conf) => info!("Default input config: {:?}", conf),
+        // Get device and config with improved error handling
+        let (cpal_audio_device, config) = match get_device_and_config(&device).await {
+            Ok((device, config)) => (device, config),
             Err(e) => {
-                error!("Failed to get default input config: {}", e);
-                return Err(anyhow!("Failed to get default input config: {}", e));
+                error!("Failed to get device and config: {}", e);
+                return Err(anyhow!("Failed to initialize audio device: {}", e));
+            }
+        };
+        
+        // Verify we can actually get input config for input devices
+        if device.device_type == DeviceType::Input {
+            match cpal_audio_device.default_input_config() {
+                Ok(conf) => info!("Default input config: {:?}", conf),
+                Err(e) => {
+                    error!("Failed to get default input config: {}", e);
+                    
+                    // On Windows, we might still be able to use the device with our custom config
+                    #[cfg(not(target_os = "windows"))]
+                    return Err(anyhow!("Failed to get default input config: {}", e));
+                    
+                    #[cfg(target_os = "windows")]
+                    warn!("Continuing with custom config despite default config error on Windows");
+                }
             }
         }
         
@@ -393,7 +454,36 @@ impl AudioStream {
                     ) {
                         Ok(stream) => stream,
                         Err(e) => {
-                            error!("Failed to build input stream: {}", e);
+                            error!("Failed to build input stream with F32 format: {}", e);
+                            
+                            #[cfg(target_os = "windows")]
+                            {
+                                // On Windows, try with a different sample format as fallback
+                                warn!("Attempting fallback with I16 format on Windows...");
+                                match cpal_audio_device.build_input_stream(
+                                    &config.into(),
+                                    move |data: &[i16], _: &_| {
+                                        let mono = audio_to_mono(bytemuck::cast_slice(data), channels);
+                                        debug!("Received audio chunk: {} samples", mono.len());
+                                        if let Err(e) = tx_clone.send(mono) {
+                                            error!("Failed to send audio data: {}", e);
+                                        }
+                                    },
+                                    error_callback.clone(),
+                                    None,
+                                ) {
+                                    Ok(stream) => {
+                                        info!("Successfully created fallback I16 stream");
+                                        stream
+                                    },
+                                    Err(e) => {
+                                        error!("Fallback stream creation also failed: {}", e);
+                                        return;
+                                    }
+                                }
+                            }
+                            
+                            #[cfg(not(target_os = "windows"))]
                             return;
                         }
                     }
@@ -468,7 +558,7 @@ impl AudioStream {
                 error!("failed to play stream for {}: {}", device.to_string(), e);
                 let err_str = e.to_string().to_lowercase();
                 if err_str.contains("permission") {
-                    error!("Permission error detected. Please check microphone permissions in System Preferences");
+                    error!("Permission error detected. Please check microphone permissions");
                 } else if err_str.contains("busy") {
                     error!("Device is busy. Another application might be using it");
                 }
@@ -532,81 +622,143 @@ impl AudioStream {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn get_windows_device(audio_device: &AudioDevice) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
+    let wasapi_host = cpal::host_from_id(cpal::HostId::Wasapi)
+        .map_err(|e| anyhow!("Failed to create WASAPI host: {}", e))?;
+
+    match audio_device.device_type {
+        DeviceType::Input => {
+            for device in wasapi_host.input_devices()? {
+                if let Ok(name) = device.name() {
+                    if name == audio_device.name {
+                        // Try to get default input config
+                        match device.default_input_config() {
+                            Ok(default_config) => {
+                                info!("Using default input config: {:?}", default_config);
+                                return Ok((device, default_config));
+                            },
+                            Err(e) => {
+                                warn!("Failed to get default input config: {}. Trying supported configs...", e);
+                                
+                                // Try to find a supported configuration
+                                if let Ok(supported_configs) = device.supported_input_configs() {
+                                    for config in supported_configs {
+                                        // Prefer configurations with F32 format
+                                        if config.sample_format() == cpal::SampleFormat::F32 {
+                                            let config = config.with_max_sample_rate();
+                                            info!("Using alternative input config: {:?}", config);
+                                            return Ok((device, config));
+                                        }
+                                    }
+                                    
+                                    // If no F32 format found, try any supported format
+                                    if let Ok(supported_configs) = device.supported_input_configs() {
+                                        if let Some(config) = supported_configs.into_iter().next() {
+                                            let config = config.with_max_sample_rate();
+                                            info!("Using fallback input config: {:?}", config);
+                                            return Ok((device, config));
+                                        }
+                                    }
+                                }
+                                
+                                return Err(anyhow!("No compatible input configuration found for device: {}", name));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        DeviceType::Output => {
+            for device in wasapi_host.output_devices()? {
+                if let Ok(name) = device.name() {
+                    if name == audio_device.name {
+                        // For output devices, we want to use them in loopback mode
+                        let supported_configs = device.supported_output_configs()?;
+                        
+                        // Try to find a config that supports f32 format
+                        for config in supported_configs {
+                            if config.sample_format() == cpal::SampleFormat::F32 {
+                                let config = config.with_max_sample_rate();
+                                return Ok((device, config));
+                            }
+                        }
+                        
+                        // If no f32 config found, use default
+                        let default_config = device
+                            .default_output_config()
+                            .map_err(|e| anyhow!("Failed to get default output config: {}", e))?;
+                        return Ok((device, default_config));
+                    }
+                }
+            }
+        }
+    }
+
+    Err(anyhow!("Device not found: {}", audio_device.name))
+}
+
 pub async fn get_device_and_config(
     audio_device: &AudioDevice,
 ) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    let host = cpal::default_host();
-    let is_output_device = audio_device.device_type == DeviceType::Output;
-    let is_display = audio_device.to_string().contains("Display");
-
-    let cpal_audio_device = if audio_device.to_string() == "default" {
-        match audio_device.device_type {
-            DeviceType::Input => host.default_input_device(),
-            DeviceType::Output => host.default_output_device(),
-        }
-    } else {
-        let mut devices = match audio_device.device_type {
-            DeviceType::Input => host.input_devices()?,
-            DeviceType::Output => host.output_devices()?,
-        };
-
-        #[cfg(target_os = "macos")]
-        {
-            if is_output_device {
-                if let Ok(screen_capture_host) = cpal::host_from_id(cpal::HostId::ScreenCaptureKit) {
-                    devices = screen_capture_host.input_devices()?;
-                }
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            if is_output_device {
-                if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
-                    devices = wasapi_host.output_devices()?;
-                }
-            }
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            if is_output_device {
-                if let Ok(pulse_host) = cpal::host_from_id(cpal::HostId::Pulse) {
-                    devices = pulse_host.input_devices()?;
-                }
-            }
-        }
-
-        devices.find(|x| {
-            x.name()
-                .map(|y| {
-                    y == audio_device
-                        .to_string()
-                        .replace(" (input)", "")
-                        .replace(" (output)", "")
-                        .trim()
-                })
-                .unwrap_or(false)
-        })
+    #[cfg(target_os = "windows")]
+    {
+        return get_windows_device(audio_device);
     }
-    .ok_or_else(|| anyhow!("Audio device not found"))?;
 
-    // Configure stream based on platform and device type
-    let config = match () {
-        #[cfg(target_os = "windows")]
-        () if is_output_device => cpal_audio_device.default_output_config()?,
+    #[cfg(not(target_os = "windows"))]
+    {
+        let host = cpal::default_host();
         
-        #[cfg(target_os = "linux")]
-        () if is_output_device => cpal_audio_device.default_input_config()?, // Use input config for PulseAudio monitors
-        
-        _ => {
-            if is_output_device && !is_display {
-                cpal_audio_device.default_output_config()?
-            } else {
-                cpal_audio_device.default_input_config()?
+        match audio_device.device_type {
+            DeviceType::Input => {
+                for device in host.input_devices()? {
+                    if let Ok(name) = device.name() {
+                        if name == audio_device.name {
+                            let default_config = device
+                                .default_input_config()
+                                .map_err(|e| anyhow!("Failed to get default input config: {}", e))?;
+                            return Ok((device, default_config));
+                        }
+                    }
+                }
+            }
+            DeviceType::Output => {
+                #[cfg(target_os = "macos")]
+                {
+                    if let Ok(host) = cpal::host_from_id(cpal::HostId::ScreenCaptureKit) {
+                        for device in host.input_devices()? {
+                            if let Ok(name) = device.name() {
+                                if name == audio_device.name {
+                                    let default_config = device
+                                        .default_input_config()
+                                        .map_err(|e| anyhow!("Failed to get default input config: {}", e))?;
+                                    return Ok((device, default_config));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    // For Linux, we use PulseAudio monitor sources for system audio
+                    if let Ok(pulse_host) = cpal::host_from_id(cpal::HostId::Pulse) {
+                        for device in pulse_host.input_devices()? {
+                            if let Ok(name) = device.name() {
+                                if name == audio_device.name {
+                                    let default_config = device
+                                        .default_input_config()
+                                        .map_err(|e| anyhow!("Failed to get default input config: {}", e))?;
+                                    return Ok((device, default_config));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-    };
-
-    Ok((cpal_audio_device, config))
+        
+        Err(anyhow!("Device not found: {}", audio_device.name))
+    }
 }
