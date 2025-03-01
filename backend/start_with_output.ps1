@@ -1,22 +1,15 @@
 # PowerShell script to start both Whisper server and Python backend with visible output
 # This script uses PowerShell's Start-Process to run both servers and show their output
 
-# Set the model name (default: small)
-$modelName = "small"
-if ($args.Count -gt 0) {
-    $modelName = $args[0]
-}
-
 # Set the port for Python backend (default: 5167)
 $port = 5167
-if ($args.Count -gt 1) {
-    $port = $args[1]
+if ($args.Count -gt 0) {
+    $port = $args[0]
 }
 
 Write-Host "====================================="
-Write-Host "Starting Meeting Minutes Backend"
+Write-Host "Meeting Minutes Backend Startup"
 Write-Host "====================================="
-Write-Host "Model: $modelName"
 Write-Host "Python Backend Port: $port"
 Write-Host "====================================="
 Write-Host ""
@@ -51,16 +44,108 @@ if (-not (Test-Path "whisper-server-package\whisper-server.exe")) {
     exit 1
 }
 
+# Check if models directory exists
+if (-not (Test-Path "whisper-server-package\models")) {
+    Write-Host "Creating models directory..."
+    New-Item -ItemType Directory -Path "whisper-server-package\models" -Force | Out-Null
+}
+
+# Define available models
+$validModels = @(
+    "tiny.en", "tiny", "base.en", "base", "small.en", "small", "medium.en", "medium", 
+    "large-v1", "large-v2", "large-v3", "large-v3-turbo", 
+    "tiny-q5_1", "tiny.en-q5_1", "tiny-q8_0", 
+    "base-q5_1", "base.en-q5_1", "base-q8_0", 
+    "small.en-tdrz", "small-q5_1", "small.en-q5_1", "small-q8_0", 
+    "medium-q5_0", "medium.en-q5_0", "medium-q8_0", 
+    "large-v2-q5_0", "large-v2-q8_0", "large-v3-q5_0", 
+    "large-v3-turbo-q5_0", "large-v3-turbo-q8_0"
+)
+
+# Get available models
+$availableModels = @()
+if (Test-Path "whisper-server-package\models") {
+    $modelFiles = Get-ChildItem "whisper-server-package\models" -Filter "ggml-*.bin" | ForEach-Object { $_.Name }
+    foreach ($file in $modelFiles) {
+        if ($file -match "ggml-(.*?)\.bin") {
+            $availableModels += $matches[1]
+        }
+    }
+}
+
+# Display available models
+Write-Host "====================================="
+Write-Host "Model Selection"
+Write-Host "====================================="
+if ($availableModels.Count -gt 0) {
+    Write-Host "Available models in models directory:"
+    for ($i = 0; $i -lt $availableModels.Count; $i++) {
+        Write-Host "  $($i+1). $($availableModels[$i])"
+    }
+} else {
+    Write-Host "No models found in models directory."
+}
+
+Write-Host ""
+Write-Host "Default model: small"
+$modelInput = Read-Host "Select a model (1-$($availableModels.Count)) or type model name or press Enter for default (small)"
+
+# Process the model selection
+$modelName = "small"  # Default model
+if (-not [string]::IsNullOrWhiteSpace($modelInput)) {
+    if ([int]::TryParse($modelInput, [ref]$null)) {
+        $index = [int]$modelInput - 1
+        if ($index -ge 0 -and $index -lt $availableModels.Count) {
+            $modelName = $availableModels[$index]
+        } else {
+            Write-Host "Invalid selection. Using default model (small)."
+        }
+    } else {
+        # Check if the input is a valid model name
+        if ($validModels -contains $modelInput) {
+            $modelName = $modelInput
+        } else {
+            Write-Host "Invalid model name. Using default model (small)."
+        }
+    }
+}
+
 # Check if the model file exists
 $modelFile = "whisper-server-package\models\ggml-$modelName.bin"
 if (-not (Test-Path $modelFile)) {
-    Write-Host "Error: Model file not found: $modelFile"
-    Write-Host "Available models:"
-    Get-ChildItem "whisper-server-package\models" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  - $($_.Name)" }
-    Write-Host ""
-    Write-Host "Please run download-ggml-model.cmd with the correct model name"
-    exit 1
+    Write-Host "Model file not found: $modelFile"
+    Write-Host "Attempting to download model..."
+    
+    # Download the model using download-ggml-model.cmd
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c download-ggml-model.cmd $modelName" -NoNewWindow -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+        Write-Host "Failed to download model. Using small model instead."
+        $modelName = "small"
+        
+        # Check if small model exists
+        if (-not (Test-Path "whisper-server-package\models\ggml-small.bin")) {
+            Write-Host "Downloading small model..."
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c download-ggml-model.cmd small" -NoNewWindow -Wait
+        }
+    } else {
+        # Move the model to the models directory if it was downloaded to whisper.cpp/models
+        if (Test-Path "whisper.cpp\models\ggml-$modelName.bin") {
+            if (-not (Test-Path "whisper-server-package\models")) {
+                New-Item -ItemType Directory -Path "whisper-server-package\models" -Force | Out-Null
+            }
+            Copy-Item "whisper.cpp\models\ggml-$modelName.bin" "whisper-server-package\models\" -Force
+            Write-Host "Model copied to whisper-server-package\models directory."
+        }
+    }
 }
+
+Write-Host "====================================="
+Write-Host "Starting Meeting Minutes Backend"
+Write-Host "====================================="
+Write-Host "Model: $modelName"
+Write-Host "Python Backend Port: $port"
+Write-Host "====================================="
+Write-Host ""
 
 # Check if virtual environment exists
 if (-not (Test-Path "venv")) {
