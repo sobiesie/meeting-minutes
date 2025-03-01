@@ -222,8 +222,12 @@ echo.
 
 echo Setting up environment variables...
 if exist "temp.env" (
-    copy temp.env .env
-    echo Environment variables copied
+    if not exist ".env" (
+        copy temp.env .env
+        echo Environment variables copied
+    else (
+        echo .env already exists. Skipping copy...
+    )
 )
 
 echo If you want to use Models hosted on Anthropic, OpenAi or GROQ, add the API keys to the .env file.
