@@ -115,7 +115,7 @@ Run the build script which will:
 - Download the selected Whisper model
 
 ```cmd
-build_whisper.cmd
+./build_whisper.cmd
 ```
 
 If no model is specified, the script will prompt you to choose one interactively.
@@ -137,7 +137,7 @@ chmod +x build_whisper.sh
 The PowerShell script provides an interactive way to start the backend services:
 
 ```cmd
-start_with_output.cmd
+./start_with_output.ps1
 ```
 
 Or directly with PowerShell:
