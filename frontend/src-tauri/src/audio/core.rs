@@ -355,14 +355,229 @@ enum StreamControl {
 }
 
 impl AudioStream {
+    #[cfg(target_os = "windows")]
+    pub async fn from_device(
+        device: Arc<AudioDevice>,
+        is_running: Arc<AtomicBool>,
+    ) -> Result<Self> {
+        info!("Initializing audio stream for Windows device: {}", device.to_string());
+        let (tx, _) = broadcast::channel::<Vec<f32>>(2000); // Increased buffer size for Windows
+        let tx_clone = tx.clone();
+        
+        // Get device and config with improved error handling
+        let (cpal_audio_device, config) = match get_device_and_config(&device).await {
+            Ok((device, config)) => (device, config),
+            Err(e) => {
+                error!("Failed to get device and config: {}", e);
+                return Err(anyhow!("Failed to initialize audio device: {}", e));
+            }
+        };
+        
+        // Verify we can actually get input config for input devices
+        if device.device_type == DeviceType::Input {
+            match cpal_audio_device.default_input_config() {
+                Ok(conf) => info!("Default input config: {:?}", conf),
+                Err(e) => {
+                    warn!("Failed to get default input config: {}", e);
+                    warn!("Continuing with custom config despite default config error on Windows");
+                }
+            }
+        }
+        
+        let channels = config.channels();
+        info!("Audio config - Sample rate: {}, Channels: {}, Format: {:?}", 
+            config.sample_rate().0, channels, config.sample_format());
+
+        let is_running_weak_2 = Arc::downgrade(&is_running);
+        let is_disconnected = Arc::new(AtomicBool::new(false));
+        let device_clone = device.clone();
+        let config_clone = config.clone();
+        let (stream_control_tx, stream_control_rx) = mpsc::channel();
+
+        let is_disconnected_clone = is_disconnected.clone();
+        let stream_control_tx_clone = stream_control_tx.clone();
+        
+        // Add a small delay to ensure Windows audio system is ready
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        
+        let stream_thread = Arc::new(tokio::sync::Mutex::new(Some(thread::spawn(move || {
+            let device = device_clone;
+            let device_name = device.to_string();
+            let device_name_clone = device_name.clone();  // Clone for the closure
+            let config = config_clone;
+            info!("Starting audio stream thread for Windows device: {}", device_name);
+            let error_callback = move |err: StreamError| {
+                if err
+                    .to_string()
+                    .contains("The requested device is no longer available")
+                {
+                    warn!(
+                        "audio device {} disconnected. stopping recording.",
+                        device_name_clone
+                    );
+                    stream_control_tx_clone
+                        .send(StreamControl::Stop(oneshot::channel().0))
+                        .unwrap();
+
+                    is_disconnected_clone.store(true, Ordering::Relaxed);
+                } else if err.to_string().to_lowercase().contains("permission denied") || 
+                         err.to_string().to_lowercase().contains("access denied") {
+                    error!("Permission denied for audio device {}. Please check microphone permissions.", device_name_clone);
+                    if let Some(arc) = is_running_weak_2.upgrade() {
+                        arc.store(false, Ordering::Relaxed);
+                    }
+                } else {
+                    error!("an error occurred on the audio stream: {}", err);
+                    if err.to_string().contains("device is no longer valid") {
+                        warn!("audio device disconnected. stopping recording.");
+                        if let Some(arc) = is_running_weak_2.upgrade() {
+                            arc.store(false, Ordering::Relaxed);
+                        }
+                    }
+                }
+            };
+
+            let stream = match config.sample_format() {
+                cpal::SampleFormat::F32 => {
+                    match cpal_audio_device.build_input_stream(
+                        &config.into(),
+                        move |data: &[f32], _: &_| {
+                            let mono = audio_to_mono(data, channels);
+                            debug!("Received audio chunk: {} samples", mono.len());
+                            if let Err(e) = tx.send(mono) {
+                                error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
+                                }
+                            }
+                        },
+                        error_callback.clone(),
+                        None,
+                    ) {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            error!("Failed to build input stream: {}", e);
+                            return;
+                        }
+                    }
+                }
+                cpal::SampleFormat::I16 => {
+                    match cpal_audio_device.build_input_stream(
+                        &config.into(),
+                        move |data: &[i16], _: &_| {
+                            let mono = audio_to_mono(bytemuck::cast_slice(data), channels);
+                            debug!("Received audio chunk: {} samples", mono.len());
+                            if let Err(e) = tx.send(mono) {
+                                error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
+                                }
+                            }
+                        },
+                        error_callback.clone(),
+                        None,
+                    ) {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            error!("Failed to build input stream: {}", e);
+                            return;
+                        }
+                    }
+                }
+                cpal::SampleFormat::I32 => {
+                    match cpal_audio_device.build_input_stream(
+                        &config.into(),
+                        move |data: &[i32], _: &_| {
+                            let mono = audio_to_mono(bytemuck::cast_slice(data), channels);
+                            debug!("Received audio chunk: {} samples", mono.len());
+                            if let Err(e) = tx.send(mono) {
+                                error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
+                                }
+                            }
+                        },
+                        error_callback.clone(),
+                        None,
+                    ) {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            error!("Failed to build input stream: {}", e);
+                            return;
+                        }
+                    }
+                }
+                cpal::SampleFormat::I8 => {
+                    match cpal_audio_device.build_input_stream(
+                        &config.into(),
+                        move |data: &[i8], _: &_| {
+                            let mono = audio_to_mono(bytemuck::cast_slice(data), channels);
+                            debug!("Received audio chunk: {} samples", mono.len());
+                            if let Err(e) = tx.send(mono) {
+                                error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
+                                }
+                            }
+                        },
+                        error_callback.clone(),
+                        None,
+                    ) {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            error!("Failed to build input stream: {}", e);
+                            return;
+                        }
+                    }
+                }
+                _ => {
+                    error!("unsupported sample format: {}", config.sample_format());
+                    return;
+                }
+            };
+
+            if let Err(e) = stream.play() {
+                error!("failed to play stream for {}: {}", device.to_string(), e);
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("permission") {
+                    error!("Permission error detected. Please check microphone permissions");
+                } else if err_str.contains("busy") {
+                    error!("Device is busy. Another application might be using it");
+                }
+                return;
+            }
+            info!("Audio stream started successfully for device: {}", device_name);
+            if let Ok(StreamControl::Stop(response)) = stream_control_rx.recv() {
+                info!("stopping audio stream...");
+                // First stop the stream
+                if let Err(e) = stream.pause() {
+                    error!("failed to pause stream: {}", e);
+                }
+                // Close the stream to release OS resources
+                drop(stream);
+                // Signal completion
+                response.send(()).ok();
+                info!("audio stream stopped and cleaned up");
+            }
+        }))));
+
+        Ok(AudioStream {
+            device,
+            device_config: config,
+            transmitter: Arc::new(tx_clone),
+            stream_control: stream_control_tx,
+            stream_thread: Some(stream_thread),
+            is_disconnected,
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
     pub async fn from_device(
         device: Arc<AudioDevice>,
         is_running: Arc<AtomicBool>,
     ) -> Result<Self> {
         info!("Initializing audio stream for device: {}", device.to_string());
-        let (tx, rx) = broadcast::channel::<Vec<f32>>(1000);
-        // Keep one receiver alive to prevent "channel closed" errors
-        let _keep_alive_rx = rx;
+        let (tx, _) = broadcast::channel::<Vec<f32>>(1000);
         let tx_clone = tx.clone();
         
         // Get device and config with improved error handling
@@ -450,9 +665,7 @@ impl AudioStream {
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
                                 if e.to_string().contains("channel closed") {
-                                    debug!("Audio channel closed, this is expected during shutdown");
-                                } else {
-                                    error!("Unexpected error sending audio data: {}", e);
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
                                 }
                             }
                         },
@@ -475,9 +688,7 @@ impl AudioStream {
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
                                 if e.to_string().contains("channel closed") {
-                                    debug!("Audio channel closed, this is expected during shutdown");
-                                } else {
-                                    error!("Unexpected error sending audio data: {}", e);
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
                                 }
                             }
                         },
@@ -500,9 +711,7 @@ impl AudioStream {
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
                                 if e.to_string().contains("channel closed") {
-                                    debug!("Audio channel closed, this is expected during shutdown");
-                                } else {
-                                    error!("Unexpected error sending audio data: {}", e);
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
                                 }
                             }
                         },
@@ -525,9 +734,7 @@ impl AudioStream {
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
                                 if e.to_string().contains("channel closed") {
-                                    debug!("Audio channel closed, this is expected during shutdown");
-                                } else {
-                                    error!("Unexpected error sending audio data: {}", e);
+                                    error!("Audio channel closed - this may indicate a permission issue or device disconnection");
                                 }
                             }
                         },
@@ -582,10 +789,73 @@ impl AudioStream {
         })
     }
 
-    pub async fn subscribe(&self) -> broadcast::Receiver<Vec<f32>> {
-        self.transmitter.subscribe()
+    #[cfg(target_os = "windows")]
+    pub async fn stop(&self) -> Result<()> {
+        info!("Stopping Windows audio stream for device: {}", self.device.to_string());
+        
+        // Mark as disconnected first
+        self.is_disconnected.store(true, Ordering::Release);
+        
+        // Send stop signal and wait for confirmation
+        let (tx, rx) = oneshot::channel();
+        if let Err(e) = self.stream_control.send(StreamControl::Stop(tx)) {
+            warn!("Failed to send stop signal: {}", e);
+            // Continue with cleanup even if sending the signal failed
+        }
+        
+        // Give a small timeout for Windows to process the stop command
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        
+        // Wait for thread to finish with timeout
+        if let Some(thread_arc) = &self.stream_thread {
+            let thread_arc = thread_arc.clone();
+            let thread_handle = tokio::task::spawn_blocking(move || {
+                let mut thread_guard = match thread_arc.try_lock() {
+                    Ok(guard) => guard,
+                    Err(_) => {
+                        warn!("Could not acquire lock on thread - it may be stuck");
+                        return Ok(());
+                    }
+                };
+                
+                if let Some(join_handle) = thread_guard.take() {
+                    // Only wait for a limited time to avoid hanging
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(500),
+                        async { join_handle.join() }
+                    ).await {
+                        Ok(result) => result.map_err(|_| anyhow!("failed to join stream thread")),
+                        Err(_) => {
+                            warn!("Timeout waiting for audio thread to join - continuing anyway");
+                            Ok(())
+                        }
+                    }
+                } else {
+                    Ok(())
+                }
+            });
+            
+            // Don't wait too long for the thread to finish
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(1000),
+                thread_handle
+            ).await {
+                Ok(result) => {
+                    if let Err(e) = result {
+                        warn!("Error joining audio thread: {}", e);
+                    }
+                },
+                Err(_) => {
+                    warn!("Timeout waiting for audio thread to complete - continuing anyway");
+                }
+            }
+        }
+        
+        info!("Windows audio stream stopped for device: {}", self.device.to_string());
+        Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     pub async fn stop(&self) -> Result<()> {
         // Mark as disconnected first
         self.is_disconnected.store(true, Ordering::Release);
@@ -613,48 +883,16 @@ impl AudioStream {
 
         Ok(())
     }
+
+    pub async fn subscribe(&self) -> broadcast::Receiver<Vec<f32>> {
+        self.transmitter.subscribe()
+    }
 }
 
 #[cfg(target_os = "windows")]
 fn get_windows_device(audio_device: &AudioDevice) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    info!("Getting Windows audio device: {}", audio_device.name);
-    
-    // Try WASAPI host first
-    let wasapi_host = match cpal::host_from_id(cpal::HostId::Wasapi) {
-        Ok(host) => {
-            info!("Successfully created WASAPI host");
-            host
-        },
-        Err(e) => {
-            error!("Failed to create WASAPI host: {}. Falling back to default host.", e);
-            cpal::default_host()
-        }
-    };
-
-    // Log available devices for debugging
-    info!("Available input devices:");
-    match wasapi_host.input_devices() {
-        Ok(devices) => {
-            for device in devices {
-                if let Ok(name) = device.name() {
-                    info!("  - Input device: {}", name);
-                }
-            }
-        },
-        Err(e) => error!("Failed to enumerate input devices: {}", e)
-    };
-    
-    info!("Available output devices:");
-    match wasapi_host.output_devices() {
-        Ok(devices) => {
-            for device in devices {
-                if let Ok(name) = device.name() {
-                    info!("  - Output device: {}", name);
-                }
-            }
-        },
-        Err(e) => error!("Failed to enumerate output devices: {}", e)
-    };
+    let wasapi_host = cpal::host_from_id(cpal::HostId::Wasapi)
+        .map_err(|e| anyhow!("Failed to create WASAPI host: {}", e))?;
 
     match audio_device.device_type {
         DeviceType::Input => {
@@ -727,60 +965,11 @@ fn get_windows_device(audio_device: &AudioDevice) -> Result<(cpal::Device, cpal:
     Err(anyhow!("Device not found: {}", audio_device.name))
 }
 
-#[cfg(target_os = "windows")]
-pub fn ensure_windows_audio_permissions() -> Result<()> {
-    info!("Checking Windows audio permissions...");
-    
-    // On Windows, we can try to access the default input device to trigger permission prompts
-    let host = cpal::default_host();
-    
-    match host.default_input_device() {
-        Some(device) => {
-            info!("Default input device found: {}", device.name()?);
-            
-            // Try to get the default input config to verify permissions
-            match device.default_input_config() {
-                Ok(config) => {
-                    info!("Default input config: {:?}", config);
-                    Ok(())
-                },
-                Err(e) => {
-                    if e.to_string().to_lowercase().contains("permission") || 
-                       e.to_string().to_lowercase().contains("access denied") {
-                        error!("Permission error detected: {}. Please check microphone permissions in Windows Settings.", e);
-                        
-                        // Inform the user about how to enable permissions
-                        info!("To enable microphone permissions:");
-                        info!("1. Go to Windows Settings > Privacy & Security > Microphone");
-                        info!("2. Ensure 'Microphone access' is turned On");
-                        info!("3. Ensure this app is allowed to access your microphone");
-                        
-                        Err(anyhow!("Microphone permission denied. Please check Windows Settings."))
-                    } else {
-                        warn!("Non-permission error with audio device: {}", e);
-                        Ok(()) // Continue despite error if it's not permission-related
-                    }
-                }
-            }
-        },
-        None => {
-            warn!("No default input device found");
-            Ok(()) // Continue anyway
-        }
-    }
-}
-
 pub async fn get_device_and_config(
     audio_device: &AudioDevice,
 ) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
     #[cfg(target_os = "windows")]
     {
-        // Check permissions first on Windows
-        if let Err(e) = ensure_windows_audio_permissions() {
-            warn!("Windows permission check warning: {}", e);
-            // Continue anyway, as the user might have manually granted permissions
-        }
-        
         return get_windows_device(audio_device);
     }
 

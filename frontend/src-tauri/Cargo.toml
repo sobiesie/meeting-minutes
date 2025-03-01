@@ -18,8 +18,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0.6", features = [] }
 reqwest = { version = "0.11", features = ["blocking", "multipart", "json"] }
 which = "6.0.1"
-
-[target.'cfg(target_os = "windows")'.build-dependencies]
 embed-resource = "2.4.0"
 
 [dependencies]
@@ -92,7 +90,8 @@ time = { version = "0.3", features = ["formatting"] }
 reqwest = { version = "0.11", features = ["multipart", "json"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.9", features = ["winuser", "winbase"] }
+winapi = { version = "0.3.9", features = ["winuser", "winbase", "processthreadsapi", "errhandlingapi", "winerror", "securitybaseapi", "handleapi"] }
+windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell"] }
 
 [dev-dependencies]
 tempfile = "3.3.0"
