@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 // Declare audio module
 pub mod audio;
 pub mod ollama;
+pub mod windows_permissions;
 
 use audio::{
     default_input_device, default_output_device, AudioStream,

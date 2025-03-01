@@ -360,7 +360,9 @@ impl AudioStream {
         is_running: Arc<AtomicBool>,
     ) -> Result<Self> {
         info!("Initializing audio stream for device: {}", device.to_string());
-        let (tx, _) = broadcast::channel::<Vec<f32>>(1000);
+        let (tx, rx) = broadcast::channel::<Vec<f32>>(1000);
+        // Keep one receiver alive to prevent "channel closed" errors
+        let _keep_alive_rx = rx;
         let tx_clone = tx.clone();
         
         // Get device and config with improved error handling
@@ -447,6 +449,11 @@ impl AudioStream {
                             debug!("Received audio chunk: {} samples", mono.len());
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    debug!("Audio channel closed, this is expected during shutdown");
+                                } else {
+                                    error!("Unexpected error sending audio data: {}", e);
+                                }
                             }
                         },
                         error_callback.clone(),
@@ -467,6 +474,11 @@ impl AudioStream {
                             debug!("Received audio chunk: {} samples", mono.len());
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    debug!("Audio channel closed, this is expected during shutdown");
+                                } else {
+                                    error!("Unexpected error sending audio data: {}", e);
+                                }
                             }
                         },
                         error_callback.clone(),
@@ -487,6 +499,11 @@ impl AudioStream {
                             debug!("Received audio chunk: {} samples", mono.len());
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    debug!("Audio channel closed, this is expected during shutdown");
+                                } else {
+                                    error!("Unexpected error sending audio data: {}", e);
+                                }
                             }
                         },
                         error_callback.clone(),
@@ -507,6 +524,11 @@ impl AudioStream {
                             debug!("Received audio chunk: {} samples", mono.len());
                             if let Err(e) = tx.send(mono) {
                                 error!("Failed to send audio data: {}", e);
+                                if e.to_string().contains("channel closed") {
+                                    debug!("Audio channel closed, this is expected during shutdown");
+                                } else {
+                                    error!("Unexpected error sending audio data: {}", e);
+                                }
                             }
                         },
                         error_callback.clone(),
@@ -595,8 +617,44 @@ impl AudioStream {
 
 #[cfg(target_os = "windows")]
 fn get_windows_device(audio_device: &AudioDevice) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    let wasapi_host = cpal::host_from_id(cpal::HostId::Wasapi)
-        .map_err(|e| anyhow!("Failed to create WASAPI host: {}", e))?;
+    info!("Getting Windows audio device: {}", audio_device.name);
+    
+    // Try WASAPI host first
+    let wasapi_host = match cpal::host_from_id(cpal::HostId::Wasapi) {
+        Ok(host) => {
+            info!("Successfully created WASAPI host");
+            host
+        },
+        Err(e) => {
+            error!("Failed to create WASAPI host: {}. Falling back to default host.", e);
+            cpal::default_host()
+        }
+    };
+
+    // Log available devices for debugging
+    info!("Available input devices:");
+    match wasapi_host.input_devices() {
+        Ok(devices) => {
+            for device in devices {
+                if let Ok(name) = device.name() {
+                    info!("  - Input device: {}", name);
+                }
+            }
+        },
+        Err(e) => error!("Failed to enumerate input devices: {}", e)
+    };
+    
+    info!("Available output devices:");
+    match wasapi_host.output_devices() {
+        Ok(devices) => {
+            for device in devices {
+                if let Ok(name) = device.name() {
+                    info!("  - Output device: {}", name);
+                }
+            }
+        },
+        Err(e) => error!("Failed to enumerate output devices: {}", e)
+    };
 
     match audio_device.device_type {
         DeviceType::Input => {
@@ -669,11 +727,60 @@ fn get_windows_device(audio_device: &AudioDevice) -> Result<(cpal::Device, cpal:
     Err(anyhow!("Device not found: {}", audio_device.name))
 }
 
+#[cfg(target_os = "windows")]
+pub fn ensure_windows_audio_permissions() -> Result<()> {
+    info!("Checking Windows audio permissions...");
+    
+    // On Windows, we can try to access the default input device to trigger permission prompts
+    let host = cpal::default_host();
+    
+    match host.default_input_device() {
+        Some(device) => {
+            info!("Default input device found: {}", device.name()?);
+            
+            // Try to get the default input config to verify permissions
+            match device.default_input_config() {
+                Ok(config) => {
+                    info!("Default input config: {:?}", config);
+                    Ok(())
+                },
+                Err(e) => {
+                    if e.to_string().to_lowercase().contains("permission") || 
+                       e.to_string().to_lowercase().contains("access denied") {
+                        error!("Permission error detected: {}. Please check microphone permissions in Windows Settings.", e);
+                        
+                        // Inform the user about how to enable permissions
+                        info!("To enable microphone permissions:");
+                        info!("1. Go to Windows Settings > Privacy & Security > Microphone");
+                        info!("2. Ensure 'Microphone access' is turned On");
+                        info!("3. Ensure this app is allowed to access your microphone");
+                        
+                        Err(anyhow!("Microphone permission denied. Please check Windows Settings."))
+                    } else {
+                        warn!("Non-permission error with audio device: {}", e);
+                        Ok(()) // Continue despite error if it's not permission-related
+                    }
+                }
+            }
+        },
+        None => {
+            warn!("No default input device found");
+            Ok(()) // Continue anyway
+        }
+    }
+}
+
 pub async fn get_device_and_config(
     audio_device: &AudioDevice,
 ) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
     #[cfg(target_os = "windows")]
     {
+        // Check permissions first on Windows
+        if let Err(e) = ensure_windows_audio_permissions() {
+            warn!("Windows permission check warning: {}", e);
+            // Continue anyway, as the user might have manually granted permissions
+        }
+        
         return get_windows_device(audio_device);
     }
 
