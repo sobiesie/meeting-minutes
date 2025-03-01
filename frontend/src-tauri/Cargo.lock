@@ -2955,6 +2955,7 @@ dependencies = [
  "tracing-subscriber",
  "which",
  "winapi",
+ "windows 0.52.0",
 ]
 
 [[package]]
@@ -6653,6 +6654,16 @@ dependencies = [
  "raw-window-handle",
  "windows-sys 0.59.0",
  "windows-version",
+]
+
+[[package]]
+name = "windows"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48a53791691ab099e5e2ad123536d0fff50652600abaf43bbf952894110d0be"
+dependencies = [
+ "windows-core 0.52.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
