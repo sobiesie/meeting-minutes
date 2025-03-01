@@ -1337,6 +1337,20 @@ checksum = "b7914353092ddf589ad78f25c5c1c21b7f80b0ff8621e7c814c3485b5306da9d"
 
 [[package]]
 name = "embed-resource"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b68b6f9f63a0b6a38bc447d4ce84e2b388f3ec95c99c641c8ff0dd3ef89a6379"
+dependencies = [
+ "cc",
+ "memchr",
+ "rustc_version",
+ "toml",
+ "vswhom",
+ "winreg 0.52.0",
+]
+
+[[package]]
+name = "embed-resource"
 version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4762ce03154ba57ebaeee60cc631901ceae4f18219cbb874e464347471594742"
@@ -2905,6 +2919,7 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "dirs 5.0.1",
+ "embed-resource 2.5.1",
  "env_logger",
  "esaxx-rs",
  "ffmpeg-sidecar",
@@ -2939,6 +2954,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "which",
+ "winapi",
 ]
 
 [[package]]
@@ -5676,7 +5692,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56eaa45f707bedf34d19312c26d350bc0f3c59a47e58e8adbeecdc850d2c13a0"
 dependencies = [
- "embed-resource",
+ "embed-resource 3.0.1",
  "toml",
 ]
 
