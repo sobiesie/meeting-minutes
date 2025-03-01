@@ -269,6 +269,6 @@ if not exist "venv" (
 echo Dependencies installed successfully
 
 echo === Build Process Complete ===
-echo You can now proceed with running the server by running 'clean_start_backend.cmd'
+echo You can now proceed with running the server by running 'start_with_output.ps1'
 
 goto :eof
