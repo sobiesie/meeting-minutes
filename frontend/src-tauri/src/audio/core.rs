@@ -444,6 +444,7 @@ impl AudioStream {
                         }
                     }
                 }
+
             }
         }
         
@@ -588,6 +589,7 @@ impl AudioStream {
                 let err_str = e.to_string().to_lowercase();
                 if err_str.contains("permission") {
                     error!("Permission error detected. Please check microphone permissions");
+
                 } else if err_str.contains("busy") {
                     error!("Device is busy. Another application might be using it");
                 }

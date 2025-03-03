@@ -26,6 +26,7 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 - Visual Studio Build Tools with C++ development tools
 - Windows 10 or later
 
+
 ## Project Structure
 
 ```
@@ -64,8 +65,10 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 
 2. Clone the repository and navigate to the frontend directory:
    ```bash
+   git clone https://github.com/Zackriya-Solutions/meeting-minutes
    cd meeting-minutes/frontend
    ```
+  
 
 3. Install dependencies:
    ```bash
@@ -82,7 +85,8 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 
 2. Clone the repository and navigate to the frontend directory:
    ```cmd
-   cd meeting-minutes\frontend
+   git clone https://github.com/Zackriya-Solutions/meeting-minutes
+   cd meeting-minutes/frontend
    ```
 
 3. Install dependencies:
