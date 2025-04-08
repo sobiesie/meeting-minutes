@@ -6,6 +6,8 @@ from typing import Optional, Dict, Any
 import logging
 import asyncio
 from contextlib import asynccontextmanager
+import time
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -16,37 +18,46 @@ class DatabaseManager:
 
     def _init_db(self):
         """Initialize the database with required tables"""
-        import sqlite3  # Use sync sqlite3 for initialization only
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Create meetings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS meetings (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            
+            # Create transcripts table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS transcripts (
+                    id TEXT PRIMARY KEY,
+                    meeting_id TEXT NOT NULL,
+                    transcript TEXT NOT NULL,
+                    summary TEXT,
+                    action_items TEXT,
+                    key_points TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (meeting_id) REFERENCES meetings(id)
+                )
+            """)
+            
+            # Create summary_processes table (keeping existing functionality)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS summary_processes (
                     id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    result TEXT,
                     error TEXT,
-                    start_time TEXT,
-                    end_time TEXT,
-                    chunk_count INTEGER DEFAULT 0,
-                    processing_time REAL DEFAULT 0.0,
-                    metadata TEXT
+                    result TEXT
                 )
             """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS transcripts (
-                    process_id TEXT PRIMARY KEY,
-                    meeting_name TEXT,
-                    transcript_text TEXT NOT NULL,
-                    model TEXT NOT NULL,
-                    model_name TEXT NOT NULL,
-                    chunk_size INTEGER,
-                    overlap INTEGER,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY (process_id) REFERENCES summary_processes(id)
-                )
-            """)
+            
             conn.commit()
 
     @asynccontextmanager
@@ -181,3 +192,105 @@ class DatabaseManager:
                 (cutoff,)
             )
             await conn.commit()
+
+    async def save_meeting_transcript(self, meeting_id: str, title: str, transcript: str, summary: str, action_items: str, key_points: str):
+        """Save meeting transcript and summary to the database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if a meeting with the same title already exists
+                cursor.execute("SELECT id FROM meetings WHERE title = ?", (title,))
+                existing_meeting = cursor.fetchone()
+                
+                if existing_meeting:
+                    raise ValueError(f"A meeting with the title '{title}' already exists")
+                
+                # Create or update meeting
+                cursor.execute("""
+                    INSERT OR REPLACE INTO meetings (id, title, created_at, updated_at)
+                    VALUES (?, ?, datetime('now'), datetime('now'))
+                """, (meeting_id, title))
+                
+                # Save transcript
+                cursor.execute("""
+                    INSERT OR REPLACE INTO transcripts (
+                        meeting_id, transcript, summary, action_items, key_points,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                """, (meeting_id, transcript, summary, action_items, key_points))
+                
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError(f"A meeting with the title '{title}' already exists")
+            raise
+        except Exception as e:
+            raise
+
+    async def get_meeting(self, meeting_id: str):
+        """Get a meeting by ID"""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT id, title, created_at, updated_at
+                FROM meetings
+                WHERE id = ?
+            """, (meeting_id,))
+            meeting = await cursor.fetchone()
+            if meeting:
+                return {
+                    'id': meeting[0],
+                    'title': meeting[1],
+                    'created_at': meeting[2],
+                    'updated_at': meeting[3]
+                }
+            return None
+
+    async def update_meeting_title(self, meeting_id: str, new_title: str):
+        """Update a meeting's title"""
+        now = datetime.utcnow().isoformat()
+        async with self._get_connection() as conn:
+            await conn.execute("""
+                UPDATE meetings
+                SET title = ?, updated_at = ?
+                WHERE id = ?
+            """, (new_title, now, meeting_id))
+            await conn.commit()
+
+    async def get_meeting_transcripts(self, meeting_id: str):
+        """Get all transcripts for a meeting"""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT id, text, timestamp, created_at
+                FROM transcripts
+                WHERE meeting_id = ?
+                ORDER BY timestamp ASC
+            """, (meeting_id,))
+            rows = await cursor.fetchall()
+            return [{
+                'id': row[0],
+                'text': row[1],
+                'timestamp': row[2],
+                'created_at': row[3]
+            } for row in rows]
+
+    async def get_all_meetings(self):
+        """Get all meetings with their transcript counts"""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT m.id, m.title, m.created_at, m.updated_at,
+                       COUNT(t.id) as transcript_count
+                FROM meetings m
+                LEFT JOIN transcripts t ON m.id = t.meeting_id
+                GROUP BY m.id
+                ORDER BY m.created_at DESC
+            """)
+            rows = await cursor.fetchall()
+            return [{
+                'id': row[0],
+                'title': row[1],
+                'created_at': row[2],
+                'updated_at': row[3],
+                'transcript_count': row[4]
+            } for row in rows]

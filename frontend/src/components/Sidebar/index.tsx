@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 
@@ -32,6 +32,13 @@ const Sidebar: React.FC = () => {
 
     return (
       <div className="flex flex-col items-center space-y-4 mt-4">
+        <button
+          onClick={() => router.push('/')}
+          className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+          title="Home"
+        >
+          <Home className="w-5 h-5 text-gray-600" />
+        </button>
         <button
           onClick={() => {
             if (isCollapsed) toggleCollapse();
@@ -141,6 +148,17 @@ const Sidebar: React.FC = () => {
 
         {/* Main content */}
         <div className="flex-1 overflow-y-auto">
+          {!isCollapsed && (
+            <div className="p-2">
+              <button
+                onClick={() => router.push('/')}
+                className="w-full flex items-center px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <Home className="w-4 h-4 mr-2" />
+                <span>Home</span>
+              </button>
+            </div>
+          )}
           {renderCollapsedIcons()}
           {sidebarItems.map(item => renderItem(item))}
         </div>

@@ -18,6 +18,7 @@ from Process_transcrip import (
     SYSTEM_PROMPT, Agent, RunContext, Section, Block
 )
 import uuid
+import time
 
 # Load environment variables
 load_dotenv()
@@ -696,6 +697,44 @@ async def shutdown_event():
         logger.info("Successfully cleaned up resources")
     except Exception as e:
         logger.error(f"Error during cleanup: {str(e)}", exc_info=True)
+
+class Transcript(BaseModel):
+    id: str
+    text: str
+    timestamp: str
+
+class SaveTranscriptRequest(BaseModel):
+    meeting_title: str
+    transcripts: List[Transcript]
+
+@app.post("/save-transcript")
+async def save_transcript(request: SaveTranscriptRequest):
+    try:
+        logger.info(f"Received save-transcript request for meeting: {request.meeting_title}")
+        logger.info(f"Number of transcripts to save: {len(request.transcripts)}")
+        
+        # Generate a unique meeting ID
+        meeting_id = f"meeting-{int(time.time() * 1000)}"
+        
+        # Combine all transcripts into a single text
+        transcript_text = "\n".join([t.text for t in request.transcripts])
+        
+        # For now, set summary, action_items, and key_points to empty strings
+        # These should be populated by the summarization process
+        await processor.db.save_meeting_transcript(
+            meeting_id=meeting_id,
+            title=request.meeting_title,
+            transcript=transcript_text,
+            summary="",
+            action_items="",
+            key_points=""
+        )
+        
+        logger.info("Transcripts saved successfully")
+        return {"status": "success", "message": "Transcript saved successfully", "meeting_id": meeting_id}
+    except Exception as e:
+        logger.error(f"Error saving transcript: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import multiprocessing

@@ -230,12 +230,14 @@ export default function Home() {
     try {
       console.log('Starting recording...');
       const { invoke } = await import('@tauri-apps/api/core');
+      const randomTitle = `Meeting ${Math.random().toString(36).substring(2, 8)}`;
+      setMeetingTitle(randomTitle);
       
       // First check if we're already recording
       const isCurrentlyRecording = await invoke('is_recording');
       if (isCurrentlyRecording) {
         console.log('Already recording, stopping first...');
-        await handleRecordingStop();
+        await handleRecordingStop2(false);
       }
 
       // Start new recording with whisper model
@@ -307,6 +309,69 @@ export default function Home() {
       }
       alert('Failed to stop recording. Check console for details.');
       setIsRecording(false); // Reset state on error
+    }
+  };
+
+  const handleRecordingStop2 = async (isCallApi: boolean) => {
+    try {
+      console.log('Stopping recording (new implementation)...');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { appDataDir } = await import('@tauri-apps/api/path');
+      
+      const dataDir = await appDataDir();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const transcriptPath = `${dataDir}transcript-${timestamp}.txt`;
+      const audioPath = `${dataDir}recording-${timestamp}.wav`;
+      
+      // Stop recording and get audio path
+      await invoke('stop_recording', { 
+        args: { 
+          model_config: modelConfig,
+          save_path: audioPath
+        }
+      });
+      console.log('Recording stopped successfully');
+
+      // Save to SQLite
+      if (isCallApi) {
+      const response = await fetch('http://localhost:5167/save-transcript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          meeting_title: meetingTitle,
+          transcripts: transcripts
+        })
+      });
+
+      if (!response.ok) {
+        setIsRecording(false);
+        throw new Error('Failed to save transcript to database');
+       
+
+      }
+    }
+
+      setIsRecording(false);
+      
+      // Show summary button if we have transcript content
+      if (transcripts.length > 0) {
+        setShowSummary(true);
+      } else {
+        console.log('No transcript content available');
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        });
+      }
+      alert('Failed to stop recording. Check console for details.');
+      setIsRecording(false);
     }
   };
 
@@ -768,7 +833,7 @@ export default function Home() {
             <div className="bg-white rounded-full shadow-lg flex items-center">
               <RecordingControls
                 isRecording={isRecording}
-                onRecordingStop={handleRecordingStop}
+                onRecordingStop={() => handleRecordingStop2(true)}
                 onRecordingStart={handleRecordingStart}
                 onTranscriptReceived={handleTranscriptUpdate}
                 barHeights={barHeights}
