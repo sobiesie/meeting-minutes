@@ -58,6 +58,49 @@ app.add_middleware(
     max_age=3600,            # Cache preflight requests for 1 hour
 )
 
+# Initialize database manager
+db = DatabaseManager()
+
+class Transcript(BaseModel):
+    id: str
+    text: str
+    timestamp: str
+
+class MeetingResponse(BaseModel):
+    id: str
+    title: str
+
+class MeetingDetailsResponse(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    transcripts: List[Transcript]
+
+@app.get("/get-meetings", response_model=List[MeetingResponse])
+async def get_meetings():
+    """Get all meetings with their basic information"""
+    try:
+        meetings = await db.get_all_meetings()
+        # Return only id and title for each meeting
+        return [{"id": meeting["id"], "title": meeting["title"]} for meeting in meetings]
+    except Exception as e:
+        logger.error(f"Error getting meetings: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get-meeting/{meeting_id}", response_model=MeetingDetailsResponse)
+async def get_meeting(meeting_id: str):
+    """Get a specific meeting by ID with all its details"""
+    try:
+        meeting = await db.get_meeting(meeting_id)
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        return meeting
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting meeting: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 class TranscriptRequest(BaseModel):
     """Request model for transcript text"""
@@ -698,11 +741,6 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error during cleanup: {str(e)}", exc_info=True)
 
-class Transcript(BaseModel):
-    id: str
-    text: str
-    timestamp: str
-
 class SaveTranscriptRequest(BaseModel):
     meeting_title: str
     transcripts: List[Transcript]
@@ -716,19 +754,19 @@ async def save_transcript(request: SaveTranscriptRequest):
         # Generate a unique meeting ID
         meeting_id = f"meeting-{int(time.time() * 1000)}"
         
-        # Combine all transcripts into a single text
-        transcript_text = "\n".join([t.text for t in request.transcripts])
+        # First save/update the meeting
+        await processor.db.save_meeting(meeting_id, request.meeting_title)
         
-        # For now, set summary, action_items, and key_points to empty strings
-        # These should be populated by the summarization process
-        await processor.db.save_meeting_transcript(
-            meeting_id=meeting_id,
-            title=request.meeting_title,
-            transcript=transcript_text,
-            summary="",
-            action_items="",
-            key_points=""
-        )
+        # Then save each transcript
+        for transcript in request.transcripts:
+            await processor.db.save_meeting_transcript(
+                meeting_id=meeting_id,
+                transcript=transcript.text,
+                timestamp=transcript.timestamp,
+                summary="",
+                action_items="",
+                key_points=""
+            )
         
         logger.info("Transcripts saved successfully")
         return {"status": "success", "message": "Transcript saved successfully", "meeting_id": meeting_id}

@@ -36,7 +36,34 @@ export const useSidebar = () => {
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        const response = await fetch('http://localhost:5167/get-meetings', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        const data = await response.json();
+        // Transform the response into the expected format
+        const transformedMeetings = data.map((meeting: any) => ({
+          id: meeting.id,
+          title: meeting.title
+        }));
+        setMeetings(transformedMeetings);
+      } catch (error) {
+        console.error('Error fetching meetings:', error);
+        setMeetings([]);
+      }
+    };
+    fetchMeetings();
+  }, []);
 
   const baseItems: SidebarItem[] = [
     {
@@ -44,8 +71,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       title: 'Meetings',
       type: 'folder' as const,
       children: [
-        { id: 'team-sync-dec-26', title: 'Team Sync - Dec 26', type: 'file' as const },
-        { id: 'product-review', title: 'Product Review', type: 'file' as const },
+        // { id: 'team-sync-dec-26', title: 'Team Sync - Dec 26', type: 'file' as const },
+        // { id: 'product-review', title: 'Product Review', type: 'file' as const },
+        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
       ]
     },
     {

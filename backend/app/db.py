@@ -37,11 +37,10 @@ class DatabaseManager:
                     id TEXT PRIMARY KEY,
                     meeting_id TEXT NOT NULL,
                     transcript TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
                     summary TEXT,
                     action_items TEXT,
                     key_points TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
                     FOREIGN KEY (meeting_id) REFERENCES meetings(id)
                 )
             """)
@@ -50,11 +49,18 @@ class DatabaseManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS summary_processes (
                     id TEXT PRIMARY KEY,
+                    meeting_id TEXT ,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     error TEXT,
-                    result TEXT
+                    result TEXT,
+                    start_time TEXT,
+                    end_time TEXT,
+                    chunk_count INTEGER DEFAULT 0,
+                    processing_time REAL DEFAULT 0.0,
+                    metadata TEXT,
+                    FOREIGN KEY (meeting_id) REFERENCES meetings(id)
                 )
             """)
             
@@ -193,59 +199,93 @@ class DatabaseManager:
             )
             await conn.commit()
 
-    async def save_meeting_transcript(self, meeting_id: str, title: str, transcript: str, summary: str, action_items: str, key_points: str):
-        """Save meeting transcript and summary to the database"""
+    async def save_meeting(self, meeting_id: str, title: str):
+        """Save or update a meeting"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Check if a meeting with the same title already exists
-                cursor.execute("SELECT id FROM meetings WHERE title = ?", (title,))
+                # Check if meeting exists
+                cursor.execute("SELECT id FROM meetings WHERE id = ?", (meeting_id,))
                 existing_meeting = cursor.fetchone()
                 
-                if existing_meeting:
-                    raise ValueError(f"A meeting with the title '{title}' already exists")
-                
-                # Create or update meeting
-                cursor.execute("""
-                    INSERT OR REPLACE INTO meetings (id, title, created_at, updated_at)
-                    VALUES (?, ?, datetime('now'), datetime('now'))
-                """, (meeting_id, title))
-                
-                # Save transcript
-                cursor.execute("""
-                    INSERT OR REPLACE INTO transcripts (
-                        meeting_id, transcript, summary, action_items, key_points,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-                """, (meeting_id, transcript, summary, action_items, key_points))
+                if not existing_meeting:
+                    # Create new meeting
+                    cursor.execute("""
+                        INSERT INTO meetings (id, title, created_at, updated_at)
+                        VALUES (?, ?, datetime('now'), datetime('now'))
+                    """, (meeting_id, title))
+                else:
+                    # Update meeting title if needed
+                    cursor.execute("""
+                        UPDATE meetings 
+                        SET title = ?, updated_at = datetime('now')
+                        WHERE id = ?
+                    """, (title, meeting_id))
                 
                 conn.commit()
                 return True
-        except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed" in str(e):
-                raise ValueError(f"A meeting with the title '{title}' already exists")
-            raise
         except Exception as e:
+            logger.error(f"Error saving meeting: {str(e)}")
+            raise
+
+    async def save_meeting_transcript(self, meeting_id: str, transcript: str, timestamp: str, summary: str = "", action_items: str = "", key_points: str = ""):
+        """Save a transcript for a meeting"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Save transcript
+                cursor.execute("""
+                    INSERT INTO transcripts (
+                        meeting_id, transcript, timestamp, summary, action_items, key_points
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                """, (meeting_id, transcript, timestamp, summary, action_items, key_points))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error saving transcript: {str(e)}")
             raise
 
     async def get_meeting(self, meeting_id: str):
-        """Get a meeting by ID"""
-        async with self._get_connection() as conn:
-            cursor = await conn.execute("""
-                SELECT id, title, created_at, updated_at
-                FROM meetings
-                WHERE id = ?
-            """, (meeting_id,))
-            meeting = await cursor.fetchone()
-            if meeting:
+        """Get a meeting by ID with all its transcripts"""
+        try:
+            async with self._get_connection() as conn:
+                # Get meeting details
+                cursor = await conn.execute("""
+                    SELECT id, title, created_at, updated_at
+                    FROM meetings
+                    WHERE id = ?
+                """, (meeting_id,))
+                meeting = await cursor.fetchone()
+                
+                if not meeting:
+                    return None
+                
+                # Get all transcripts for this meeting
+                cursor = await conn.execute("""
+                    SELECT transcript, timestamp
+                    FROM transcripts
+                    WHERE meeting_id = ?
+                    ORDER BY timestamp
+                """, (meeting_id,))
+                transcripts = await cursor.fetchall()
+                
                 return {
                     'id': meeting[0],
                     'title': meeting[1],
                     'created_at': meeting[2],
-                    'updated_at': meeting[3]
+                    'updated_at': meeting[3],
+                    'transcripts': [{
+                        'id': meeting_id,
+                        'text': transcript[0],
+                        'timestamp': transcript[1]
+                    } for transcript in transcripts]
                 }
-            return None
+        except Exception as e:
+            logger.error(f"Error getting meeting: {str(e)}")
+            raise
 
     async def update_meeting_title(self, meeting_id: str, new_title: str):
         """Update a meeting's title"""
@@ -262,35 +302,28 @@ class DatabaseManager:
         """Get all transcripts for a meeting"""
         async with self._get_connection() as conn:
             cursor = await conn.execute("""
-                SELECT id, text, timestamp, created_at
+                SELECT id, transcript, created_at
                 FROM transcripts
                 WHERE meeting_id = ?
-                ORDER BY timestamp ASC
+                ORDER BY created_at ASC
             """, (meeting_id,))
             rows = await cursor.fetchall()
             return [{
                 'id': row[0],
                 'text': row[1],
-                'timestamp': row[2],
-                'created_at': row[3]
+                'timestamp': row[2]
             } for row in rows]
 
     async def get_all_meetings(self):
-        """Get all meetings with their transcript counts"""
+        """Get all meetings with basic information"""
         async with self._get_connection() as conn:
             cursor = await conn.execute("""
-                SELECT m.id, m.title, m.created_at, m.updated_at,
-                       COUNT(t.id) as transcript_count
-                FROM meetings m
-                LEFT JOIN transcripts t ON m.id = t.meeting_id
-                GROUP BY m.id
-                ORDER BY m.created_at DESC
+                SELECT id, title
+                FROM meetings
+                ORDER BY created_at DESC
             """)
             rows = await cursor.fetchall()
             return [{
                 'id': row[0],
-                'title': row[1],
-                'created_at': row[2],
-                'updated_at': row[3],
-                'transcript_count': row[4]
+                'title': row[1]
             } for row in rows]
