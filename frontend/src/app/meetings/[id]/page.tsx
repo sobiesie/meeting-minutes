@@ -49,9 +49,13 @@ export async function generateStaticParams() {
   console.log('Meetings received:', meetings);
   
   // Return array of objects with id property for each meeting
-  return meetings.map((meeting: { id: string }) => ({
-    id: meeting.id
-  }));
+  if (meetings.length > 0) {
+    return meetings.map((meeting: { id: string }) => ({
+      id: meeting.id
+    }));
+  } else {
+    return [{ id: 'intro-call' }];
+  }
 }
 
 export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {

@@ -107,6 +107,7 @@ class TranscriptRequest(BaseModel):
     text: str
     model: str
     model_name: str
+    meeting_id: str
     chunk_size: Optional[int] = 5000
     overlap: Optional[int] = 1000
 
@@ -519,7 +520,7 @@ async def process_transcript_background(process_id: str, transcript: TranscriptR
         
         # Update database with meeting name
         if final_summary["MeetingName"]:
-            await processor.db.update_meeting_name(process_id, final_summary["MeetingName"])
+            await processor.db.update_meeting_name(transcript.meeting_id, final_summary["MeetingName"])
         
         # Save final result
         await processor.db.update_process(process_id, status="completed", result=json.dumps(final_summary))
@@ -537,12 +538,12 @@ async def process_transcript_api(
 ):
     """Process a transcript text with background processing"""
     try:
-        # Create new process
-        process_id = await processor.db.create_process()
+        # Create new process with meeting_id
+        process_id = await processor.db.create_process(transcript.meeting_id)
         
         # Save transcript data
         await processor.db.save_transcript(
-            process_id,
+            transcript.meeting_id,
             transcript.text,
             transcript.model,
             transcript.model_name,
@@ -566,22 +567,22 @@ async def process_transcript_api(
         logger.error(f"Error in process_transcript_api: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/get-summary/{process_id}")
-async def get_summary(process_id: str):
-    """Get the summary for a given process ID"""
+@app.get("/get-summary/{meeting_id}")
+async def get_summary(meeting_id: str):
+    """Get the summary for a given meeting ID"""
     try:
-        result = await processor.db.get_transcript_data(process_id)
+        result = await processor.db.get_transcript_data(meeting_id)
         if not result:
             return JSONResponse(
                 status_code=404,
                 content={
                     "status": "error",
                     "meetingName": None,
-                    "process_id": process_id,
+                    "meeting_id": meeting_id,
                     "data": None,
                     "start": None,
                     "end": None,
-                    "error": "Process ID not found"
+                    "error": "Meeting ID not found"
                 }
             )
 
@@ -597,13 +598,13 @@ async def get_summary(process_id: str):
                     # If it's still a string, it means it was double-encoded
                     summary_data = json.loads(summary_data)
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON data for process {process_id}: {str(e)}")
+                logger.error(f"Failed to parse JSON data for meeting {meeting_id}: {str(e)}")
                 
         # Build response
         response = {
             "status": "processing" if status in ["processing", "pending"] else status,
             "meetingName": summary_data.get("MeetingName") if summary_data else None,
-            "process_id": process_id,
+            "meeting_id": meeting_id,
             "start": result.get("start_time"),
             "end": result.get("end_time"),
             "data": summary_data
@@ -630,13 +631,13 @@ async def get_summary(process_id: str):
             return JSONResponse(status_code=400, content=response)
             
     except Exception as e:
-        logger.error(f"Error getting summary for {process_id}: {str(e)}")
+        logger.error(f"Error getting summary for {meeting_id}: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={
                 "status": "error",
                 "meetingName": None,
-                "process_id": process_id,
+                "meeting_id": meeting_id,
                 "data": None,
                 "start": None,
                 "end": None,

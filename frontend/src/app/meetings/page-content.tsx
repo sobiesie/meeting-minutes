@@ -3,480 +3,350 @@ import { useState, useEffect, useCallback } from 'react';
 import { Transcript, Summary, SummaryResponse } from '@/types';
 import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
-import { RecordingControls } from '@/components/RecordingControls';
 import { AISummary } from '@/components/AISummary';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
-import { listen } from '@tauri-apps/api/event';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { downloadDir } from '@tauri-apps/api/path';
 
+interface ModelConfig {
+  provider: 'ollama' | 'groq' | 'claude';
+  model: string;
+  whisperModel: string;
+}
 
-interface TranscriptUpdate {
-    text: string;
-    timestamp: string;
-    source: string;
-  }
-  
-  interface ModelConfig {
-    provider: 'ollama' | 'groq' | 'claude';
-    model: string;
-    whisperModel: string;
-  }
-  
-  type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  
-  interface OllamaModel {
-    name: string;
-    id: string;
-    size: string;
-    modified: string;
-  }
-  
+type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
+
+interface OllamaModel {
+  name: string;
+  id: string;
+  size: string;
+  modified: string;
+}
+
 export default function PageContent({ meeting }: { meeting: any }) {
+  const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
+  const [meetingTitle, setMeetingTitle] = useState(meeting.title || 'New Call');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [aiSummary, setAiSummary] = useState<Summary | null>({
+    key_points: { title: "Key Points", blocks: [] },
+    action_items: { title: "Action Items", blocks: [] },
+    decisions: { title: "Decisions", blocks: [] },
+    main_topics: { title: "Main Topics", blocks: [] }
+  });
+  const [summaryResponse, setSummaryResponse] = useState<SummaryResponse | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [modelConfig, setModelConfig] = useState<ModelConfig>({
+    provider: 'ollama',
+    model: 'llama3.2:latest',
+    whisperModel: 'large-v3'
+  });
+  const [originalTranscript, setOriginalTranscript] = useState<string>('');
+  const [models, setModels] = useState<OllamaModel[]>([]);
+  const [error, setError] = useState<string>('');
+  const [showModelSettings, setShowModelSettings] = useState(false);
 
-    const [isRecording, setIsRecording] = useState(false);
-    const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
-    const [showSummary, setShowSummary] = useState(false);
-    const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
-    const [barHeights, setBarHeights] = useState(['58%', '76%', '58%']);
-    const [meetingTitle, setMeetingTitle] = useState('New Call');
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
-    const [aiSummary, setAiSummary] = useState<Summary | null>({
-      key_points: { title: "Key Points", blocks: [] },
-      action_items: { title: "Action Items", blocks: [] },
-      decisions: { title: "Decisions", blocks: [] },
-      main_topics: { title: "Main Topics", blocks: [] }
-    });
-    const [summaryResponse, setSummaryResponse] = useState<SummaryResponse | null>(null);
-  
-    const [isCollapsed, setIsCollapsed] = useState(false);
-  
-    const [summaryError, setSummaryError] = useState<string | null>(null);
-  
-    const [modelConfig, setModelConfig] = useState<ModelConfig>({
-      provider: 'ollama',
-      model: 'llama3.2:latest',
-      whisperModel: 'large-v3'
-    });
-  
-    const [originalTranscript, setOriginalTranscript] = useState<string>('');
-  
-    const [models, setModels] = useState<OllamaModel[]>([]);
-    const [error, setError] = useState<string>('');
-  
-    const modelOptions = {
-      ollama: models.map(model => model.name),
-      claude: ['claude-3-5-sonnet-latest'],
-      groq: ['llama-3.3-70b-versatile'],
-    };
-  
-    useEffect(() => {
-      if (models.length > 0 && modelConfig.provider === 'ollama') {
-        setModelConfig(prev => ({
-          ...prev,
-          model: models[0].name
+  const modelOptions = {
+    ollama: models.map(model => model.name),
+    claude: ['claude-3-5-sonnet-latest'],
+    groq: ['llama-3.3-70b-versatile'],
+  };
+
+  useEffect(() => {
+    if (models.length > 0 && modelConfig.provider === 'ollama') {
+      setModelConfig(prev => ({
+        ...prev,
+        model: models[0].name
+      }));
+    }
+  }, [models]);
+
+  const { setCurrentMeeting } = useSidebar();
+
+  useEffect(() => {
+    setCurrentMeeting({ id: meeting.id, title: meetingTitle });
+  }, [meetingTitle, setCurrentMeeting, meeting.id]);
+
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const response = await fetch('http://localhost:11434/api/tags', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const modelList = data.models.map((model: any) => ({
+          name: model.name,
+          id: model.model,
+          size: formatSize(model.size),
+          modified: model.modified_at
         }));
-      }
-    }, [models]);
-  
-    const whisperModels = [
-      'tiny',
-      'tiny.en',
-      'tiny-q5_1',
-      'tiny.en-q5_1',
-      'tiny-q8_0',
-      'base',
-      'base.en',
-      'base-q5_1',
-      'base.en-q5_1',
-      'base-q8_0',
-      'small',
-      'small.en',
-      'small.en-tdrz',
-      'small-q5_1',
-      'small.en-q5_1',
-      'small-q8_0',
-      'medium',
-      'medium.en',
-      'medium-q5_0',
-      'medium.en-q5_0',
-      'medium-q8_0',
-      'large-v1',
-      'large-v2',
-      'large-v2-q5_0',
-      'large-v2-q8_0',
-      'large-v3',
-      'large-v3-q5_0',
-      'large-v3-turbo',
-      'large-v3-turbo-q5_0',
-      'large-v3-turbo-q8_0'
-    ];
-  
-    const [showModelSettings, setShowModelSettings] = useState(false);
-  
-    const { setCurrentMeeting } = useSidebar();
-  
-    useEffect(() => {
-      setCurrentMeeting({ id: 'intro-call', title: meetingTitle });
-    }, [meetingTitle, setCurrentMeeting]);
-  
-    useEffect(() => {
-      if (isRecording) {
-        const interval = setInterval(() => {
-          setBarHeights(prev => {
-            const newHeights = [...prev];
-            newHeights[0] = Math.random() * 20 + 10 + 'px';
-            newHeights[1] = Math.random() * 20 + 10 + 'px';
-            newHeights[2] = Math.random() * 20 + 10 + 'px';
-            return newHeights;
-          });
-        }, 300);
-  
-        return () => clearInterval(interval);
-      }
-    }, [isRecording]);
-  
-    useEffect(() => {
-      let unlistenFn: (() => void) | undefined;
-      let transcriptCounter = 0;  // Counter for unique IDs
-  
-      const setupListener = async () => {
-        try {
-          console.log('Setting up transcript listener...');
-          unlistenFn = await listen<TranscriptUpdate>('transcript-update', (event) => {
-            console.log('Received transcript update:', event.payload);
-            const newTranscript = {
-              id: `${Date.now()}-${transcriptCounter++}`,  // Combine timestamp with counter for uniqueness
-              text: event.payload.text,
-              timestamp: event.payload.timestamp,
-            };
-            setTranscripts(prev => {
-              // Check if this transcript already exists
-              const exists = prev.some(
-                t => t.text === event.payload.text && t.timestamp === event.payload.timestamp
-              );
-              if (exists) {
-                console.log('Duplicate transcript, skipping:', newTranscript);
-                return prev;
-              }
-              console.log('Adding new transcript:', newTranscript);
-              return [...prev, newTranscript];
-            });
-          });
-          console.log('Transcript listener setup complete');
-        } catch (error) {
-          console.error('Failed to setup transcript listener:', error);
-          alert('Failed to setup transcript listener. Check console for details.');
-        }
-      };
-  
-      setupListener();
-      console.log('Started listener setup');
-  
-      return () => {
-        console.log('Cleaning up transcript listener...');
-        if (unlistenFn) {
-          unlistenFn();
-          console.log('Transcript listener cleaned up');
-        }
-      };
-    }, []);
-  
-    useEffect(() => {
-      const loadModels = async () => {
-        try {
-          const response = await fetch('http://localhost:11434/api/tags', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
-  
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-  
-          const data = await response.json();
-          const modelList = data.models.map((model: any) => ({
-            name: model.name,
-            id: model.model,
-            size: formatSize(model.size),
-            modified: model.modified_at
-          }));
-          setModels(modelList);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to load Ollama models');
-          console.error('Error loading models:', err);
-        }
-      };
-  
-      loadModels();
-    }, []);
-  
-    const formatSize = (size: number): string => {
-      if (size < 1024) {
-        return `${size} B`;
-      } else if (size < 1024 * 1024) {
-        return `${(size / 1024).toFixed(1)} KB`;
-      } else if (size < 1024 * 1024 * 1024) {
-        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-      } else {
-        return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+        setModels(modelList);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load Ollama models');
+        console.error('Error loading models:', err);
       }
     };
-    const generateAISummary = useCallback(async () => {
-        setSummaryStatus('processing');
-        setSummaryError(null);
-    
+
+    loadModels();
+  }, []);
+
+  const formatSize = (size: number): string => {
+    if (size < 1024) {
+      return `${size} B`;
+    } else if (size < 1024 * 1024) {
+      return `${(size / 1024).toFixed(1)} KB`;
+    } else if (size < 1024 * 1024 * 1024) {
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    } else {
+      return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+  };
+
+  const generateAISummary = useCallback(async () => {
+    setSummaryStatus('processing');
+    setSummaryError(null);
+
+    try {
+      const fullTranscript = transcripts?.map(t => t.text).join('\n');
+      if (!fullTranscript.trim()) {
+        throw new Error('No transcript text available. Please add some text first.');
+      }
+      
+      setOriginalTranscript(fullTranscript);
+      
+      console.log('Generating summary for transcript length:', fullTranscript.length);
+      
+      // Process transcript and get process_id
+      console.log('Processing transcript...');
+      const response = await fetch('http://localhost:5167/process-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: fullTranscript,
+          model: modelConfig.provider,
+          model_name: modelConfig.model,
+          meeting_id: meeting.id,
+          chunk_size: 40000,
+          overlap: 1000
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Process transcript failed:', errorData);
+        setSummaryError(errorData.error || 'Failed to process transcript');
+        setSummaryStatus('error');
+        return;
+      }
+
+      const { process_id } = await response.json();
+      console.log('Process ID:', process_id);
+
+      // Poll for summary status
+      const pollInterval = setInterval(async () => {
         try {
-          const fullTranscript = transcripts?.map(t => t.text).join('\n');
-          if (!fullTranscript.trim()) {
-            throw new Error('No transcript text available. Please add some text first.');
-          }
-          
-          // Store the original transcript for regeneration
-          setOriginalTranscript(fullTranscript);
-          
-          console.log('Generating summary for transcript length:', fullTranscript.length);
-          
-          // Process transcript and get process_id
-          console.log('Processing transcript...');
-          const response = await fetch('http://localhost:5167/process-transcript', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: fullTranscript,
-              model: modelConfig.provider,
-              model_name: modelConfig.model,
-              chunk_size: 40000,
-              overlap: 1000
-            })
-          });
-    
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Process transcript failed:', errorData);
-            setSummaryError(errorData.error || 'Failed to process transcript');
+          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+
+          if (!statusResponse.ok) {
+            const errorData = await statusResponse.json();
+            console.error('Get summary failed:', errorData);
+            setSummaryError(errorData.error || 'Unknown error');
             setSummaryStatus('error');
+            clearInterval(pollInterval);
             return;
           }
-    
-          const { process_id } = await response.json();
-          console.log('Process ID:', process_id);
-    
-          // Poll for summary status
-          const pollInterval = setInterval(async () => {
-            try {
-              const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
-              
-              if (!statusResponse.ok) {
-                const errorData = await statusResponse.json();
-                console.error('Get summary failed:', errorData);
-                setSummaryError(errorData.error || 'Unknown error');
-                setSummaryStatus('error');
-                clearInterval(pollInterval);
-                return;
-              }
-    
-              const result = await statusResponse.json();
-              console.log('Summary status:', result);
-    
-              if (result.status === 'error') {
-                setSummaryError(result.error || 'Unknown error');
-                setSummaryStatus('error');
-                clearInterval(pollInterval);
-                return;
-              }
-    
-              if (result.status === 'completed' && result.data) {
-                clearInterval(pollInterval);
-                
-                // Remove MeetingName from data before formatting
-                const { MeetingName, ...summaryData } = result.data;
-                
-                // Update meeting title if available
-                if (MeetingName) {
-                  setMeetingTitle(MeetingName);
-                }
-    
-                // Format the summary data with consistent styling
-                const formattedSummary = Object.entries(summaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
-                  acc[key] = {
-                    title: section.title,
-                    blocks: section.blocks.map((block: any) => ({
-                      ...block,
-                      type: 'bullet',
-                      color: 'default',
-                      content: block.content.trim() // Remove trailing newlines
-                    }))
-                  };
-                  return acc;
-                }, {} as Summary);
-    
-                setAiSummary(formattedSummary);
-                setSummaryStatus('completed');
-              }
-            } catch (error) {
-              console.error('Failed to get summary status:', error);
-              if (error instanceof Error) {
-                setSummaryError(`Failed to get summary status: ${error.message}`);
-              } else {
-                setSummaryError('Failed to get summary status: Unknown error');
-              }
-              setSummaryStatus('error');
-              clearInterval(pollInterval);
+
+          const result = await statusResponse.json();
+          console.log('Summary status:', result);
+
+          if (result.status === 'error') {
+            setSummaryError(result.error || 'Unknown error');
+            setSummaryStatus('error');
+            clearInterval(pollInterval);
+            return;
+          }
+
+          if (result.status === 'completed' && result.data) {
+            clearInterval(pollInterval);
+
+            // Remove MeetingName from data before formatting
+            const { MeetingName, ...summaryData } = result.data;
+
+            // Update meeting title if available
+            if (MeetingName) {
+              setMeetingTitle(MeetingName);
             }
-          }, 5000); // Poll every 30 seconds
-    
-          // Cleanup interval on component unmount
-          return () => clearInterval(pollInterval);
-          
+            
+            // Format the summary data with consistent styling
+            const formattedSummary = Object.entries(summaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
+              acc[key] = {
+                title: section.title,
+                blocks: section.blocks.map((block: any) => ({
+                  ...block,
+                  type: 'bullet',
+                  color: 'default',
+                  content: block.content.trim() // Remove trailing newlines
+                }))
+              };
+              return acc;
+            }, {} as Summary);
+
+            setAiSummary(formattedSummary);
+            setSummaryStatus('completed');
+          }
         } catch (error) {
-          console.error('Failed to generate summary:', error);
+          console.error('Failed to get summary status:', error);
           if (error instanceof Error) {
-            setSummaryError(`Failed to generate summary: ${error.message}`);
+            setSummaryError(`Failed to get summary status: ${error.message}`);
           } else {
-            setSummaryError('Failed to generate summary: Unknown error');
+            setSummaryError('Failed to get summary status: Unknown error');
           }
           setSummaryStatus('error');
-        }
-      }, [transcripts, modelConfig]);  
+          clearInterval(pollInterval);
 
+        }
+      }, 5000); // Poll every 5 seconds
 
-      const handleSummary = useCallback((summary: any) => {
-        setAiSummary(summary);
-      }, []);
-    
-      const handleSummaryChange = (newSummary: Summary) => {
-        console.log('Summary changed:', newSummary);
-        setAiSummary(newSummary);
-      };
-    
-      const handleTitleChange = (newTitle: string) => {
-        setMeetingTitle(newTitle);
-        setCurrentMeeting({ id: 'intro-call', title: newTitle });
-      };
-    
-      const getSummaryStatusMessage = (status: SummaryStatus) => {
-        switch (status) {
-          case 'idle':
-            return 'Ready to generate summary';
-          case 'processing':
-            return 'Processing transcript...';
-          case 'summarizing':
-            return 'Generating AI summary...';
-          case 'regenerating':
-            return 'Regenerating AI summary...';
-          case 'completed':
-            return 'Summary generated successfully!';
-          case 'error':
-            return summaryError || 'An error occurred';
-          default:
-            return '';
-        }
-      };
-      const handleRegenerateSummary = useCallback(async () => {
-        if (!originalTranscript.trim()) {
-          console.error('No original transcript available for regeneration');
-          return;
-        }
-    
-        setSummaryStatus('regenerating');
-        setSummaryError(null);
-    
+      // Cleanup interval on component unmount
+      return () => clearInterval(pollInterval);
+    } catch (error) {
+      console.error('Failed to generate summary:', error);
+      if (error instanceof Error) {
+        setSummaryError(`Failed to generate summary: ${error.message}`);
+      } else {
+        setSummaryError('Failed to generate summary: Unknown error');
+      }
+      setSummaryStatus('error');
+    }
+  }, [transcripts, modelConfig, meeting.id]);
+
+  const handleSummary = useCallback((summary: any) => {
+    setAiSummary(summary);
+  }, []);
+
+  const handleSummaryChange = (newSummary: Summary) => {
+    setAiSummary(newSummary);
+  };
+
+  const handleTitleChange = (newTitle: string) => {
+    setMeetingTitle(newTitle);
+  };
+
+  const getSummaryStatusMessage = (status: SummaryStatus) => {
+    switch (status) {
+      case 'processing':
+        return 'Processing transcript...';
+      case 'summarizing':
+        return 'Generating summary...';
+      case 'regenerating':
+        return 'Regenerating summary...';
+      case 'completed':
+        return 'Summary completed';
+      case 'error':
+        return 'Error generating summary';
+      default:
+        return '';
+    }
+  };
+
+  const handleRegenerateSummary = useCallback(async () => {
+    if (!originalTranscript.trim()) {
+      console.error('No original transcript available for regeneration');
+      return;
+    }
+
+    setSummaryStatus('regenerating');
+    setSummaryError(null);
+
+    try {
+      console.log('Regenerating summary with original transcript...');
+      
+      // Process transcript and get process_id
+      console.log('Processing transcript...');
+      const response = await fetch('http://localhost:5167/process-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: originalTranscript,
+          model: modelConfig.provider,
+          model_name: modelConfig.model,
+          meeting_id: meeting.id,
+          chunk_size: 40000,
+          overlap: 1000
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Process transcript failed:', errorData);
+        throw new Error(errorData.error || 'Failed to process transcript');
+      }
+
+      const { process_id } = await response.json();
+      console.log('Process ID:', process_id);
+
+      // Poll for summary status
+      const pollInterval = setInterval(async () => {
         try {
-          console.log('Regenerating summary with original transcript...');
-          
-          // Process transcript and get process_id
-          console.log('Processing transcript...');
-          const response = await fetch('http://localhost:5167/process-transcript', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: originalTranscript,
-              model: modelConfig.provider,
-              model_name: modelConfig.model,
-              chunk_size: 40000,
-              overlap: 1000
-            })
-          });
-    
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Process transcript failed:', errorData);
-            throw new Error(errorData.error || 'Failed to process transcript');
+          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          if (!statusResponse.ok) {
+            const errorData = await statusResponse.json();
+            console.error('Get summary failed:', errorData);
+            throw new Error(errorData.error || 'Failed to get summary status');
           }
-    
-          const { process_id } = await response.json();
-          console.log('Process ID:', process_id);
-    
-          // Poll for summary status
-          const pollInterval = setInterval(async () => {
-            try {
-              const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
-              if (!statusResponse.ok) {
-                const errorData = await statusResponse.json();
-                console.error('Get summary failed:', errorData);
-                throw new Error(errorData.error || 'Failed to get summary status');
-              }
-    
-              const result = await statusResponse.json();
-              console.log('Summary status:', result);
-    
-              if (result.status === 'error') {
-                setSummaryError(result.error || 'Unknown error');
-                setSummaryStatus('error');
-                clearInterval(pollInterval);
-                return;
-              }
-    
-              if (result.status === 'completed' && result.data) {
-                clearInterval(pollInterval);
-                
-                // Remove MeetingName from data before formatting
-                const { MeetingName, ...summaryData } = result.data;
-                
-                // Update meeting title if available
-                if (MeetingName) {
-                  setMeetingTitle(MeetingName);
-                }
-    
-                // Format the summary data with consistent styling
-                const formattedSummary = Object.entries(summaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
-                  acc[key] = {
-                    title: section.title,
-                    blocks: section.blocks.map((block: any) => ({
-                      ...block,
-                      type: 'bullet',
-                      color: 'default',
-                      content: block.content.trim()
-                    }))
-                  };
-                  return acc;
-                }, {} as Summary);
-    
-                setAiSummary(formattedSummary);
-                setSummaryStatus('completed');
-              } else if (result.status === 'error') {
-                clearInterval(pollInterval);
-                throw new Error(result.error || 'Failed to generate summary');
-              }
-            } catch (error) {
-              clearInterval(pollInterval);
-              console.error('Failed to get summary status:', error);
-              if (error instanceof Error) {
-                setSummaryError(error.message);
-              } else {
-                setSummaryError('An unexpected error occurred');
-              }
-              setSummaryStatus('error');
-              setAiSummary(null);
+
+          const result = await statusResponse.json();
+          console.log('Summary status:', result);
+
+          if (result.status === 'error') {
+            setSummaryError(result.error || 'Unknown error');
+            setSummaryStatus('error');
+            clearInterval(pollInterval);
+            return;
+          }
+
+          if (result.status === 'completed' && result.data) {
+            clearInterval(pollInterval);
+            
+            // Remove MeetingName from data before formatting
+            const { MeetingName, ...summaryData } = result.data;
+            
+            // Update meeting title if available
+            if (MeetingName) {
+              setMeetingTitle(MeetingName);
             }
-          }, 10000);
-    
-          return () => clearInterval(pollInterval);
+
+            // Format the summary data with consistent styling
+            const formattedSummary = Object.entries(summaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
+              acc[key] = {
+                title: section.title,
+                blocks: section.blocks.map((block: any) => ({
+                  ...block,
+                  type: 'bullet',
+                  color: 'default',
+                  content: block.content.trim()
+                }))
+              };
+              return acc;
+            }, {} as Summary);
+
+            setAiSummary(formattedSummary);
+            setSummaryStatus('completed');
+          } else if (result.status === 'error') {
+            clearInterval(pollInterval);
+            throw new Error(result.error || 'Failed to generate summary');
+          }
         } catch (error) {
-          console.error('Failed to regenerate summary:', error);
+          clearInterval(pollInterval);
+          console.error('Failed to get summary status:', error);
           if (error instanceof Error) {
             setSummaryError(error.message);
           } else {
@@ -485,45 +355,67 @@ export default function PageContent({ meeting }: { meeting: any }) {
           setSummaryStatus('error');
           setAiSummary(null);
         }
-      }, [originalTranscript, modelConfig]);
-    
-      const handleCopyTranscript = useCallback(() => {
-        const fullTranscript = transcripts
-          .map(t => `${t.timestamp}: ${t.text}`)
-          .join('\n');
-        navigator.clipboard.writeText(fullTranscript);
-      }, [transcripts]);
-    
-      const handleGenerateSummary = useCallback(async () => {
-        if (!transcripts?.length) {
-          console.log('No transcripts available for summary');
-          return;
-        }
-        
-        try {
-          await generateAISummary();
-        } catch (error) {
-          console.error('Failed to generate summary:', error);
-          if (error instanceof Error) {
-            setSummaryError(error.message);
-          } else {
-            setSummaryError('Failed to generate summary: Unknown error');
-          }
-        }
-      }, [transcripts, generateAISummary]);
-    
-      const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';    
-    return (
-        <div className="flex flex-col h-screen bg-gray-50">
-                  <div className="flex flex-1 overflow-hidden">
+      }, 10000);
 
-                  <div className="w-1/3 min-w-[300px] border-r border-gray-200 bg-white flex flex-col relative">
-                  <div className="p-4 border-b border-gray-200">
-                  <div className="flex flex-col space-y-3">
-                  <div className="flex items-center">
-                    <EditableTitle title={meeting.title} isEditing={false} onStartEditing={() => {}} onFinishEditing={() => {}} onChange={() => {}} />
-                    </div>
-                    <button
+      return () => clearInterval(pollInterval);
+    } catch (error) {
+      console.error('Failed to regenerate summary:', error);
+      if (error instanceof Error) {
+        setSummaryError(error.message);
+      } else {
+        setSummaryError('An unexpected error occurred');
+      }
+      setSummaryStatus('error');
+      setAiSummary(null);
+    }
+  }, [originalTranscript, modelConfig, meeting.id]);
+
+  const handleCopyTranscript = useCallback(() => {
+    const fullTranscript = transcripts
+      .map(t => `${t.timestamp}: ${t.text}`)
+      .join('\n');
+    navigator.clipboard.writeText(fullTranscript);
+  }, [transcripts]);
+
+  const handleGenerateSummary = useCallback(async () => {
+    if (!transcripts.length) {
+      console.log('No transcripts available for summary');
+      return;
+    }
+    
+    try {
+      await generateAISummary();
+    } catch (error) {
+      console.error('Failed to generate summary:', error);
+      if (error instanceof Error) {
+        setSummaryError(error.message);
+      } else {
+        setSummaryError('Failed to generate summary: Unknown error');
+      }
+    }
+  }, [transcripts, generateAISummary]);
+
+  const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left side - Transcript */}
+        <div className="w-1/3 min-w-[300px] border-r border-gray-200 bg-white flex flex-col relative">
+          {/* Title area */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex flex-col space-y-3">
+              <div className="flex items-center">
+                <EditableTitle
+                  title={meetingTitle}
+                  isEditing={isEditingTitle}
+                  onStartEditing={() => setIsEditingTitle(true)}
+                  onFinishEditing={() => setIsEditingTitle(false)}
+                  onChange={handleTitleChange}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
                   onClick={handleCopyTranscript}
                   disabled={transcripts?.length === 0}
                   className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
@@ -539,7 +431,7 @@ export default function PageContent({ meeting }: { meeting: any }) {
                   </svg>
                   <span className="text-sm">Copy Transcript</span>
                 </button>
-                {showSummary && !isRecording && (
+                {transcripts?.length > 0 && (
                   <>
                     <button
                       onClick={handleGenerateSummary}
@@ -547,19 +439,15 @@ export default function PageContent({ meeting }: { meeting: any }) {
                       className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
                         summaryStatus === 'processing'
                           ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                          : transcripts?.length === 0
-                          ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
                           : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300 active:bg-green-200'
                       }`}
                       title={
                         summaryStatus === 'processing'
                           ? 'Generating summary...'
-                          : transcripts?.length === 0
-                          ? 'No transcript available'
                           : 'Generate AI Summary'
                       }
                     >
-                        {summaryStatus === 'processing' ? (
+                      {summaryStatus === 'processing' ? (
                         <>
                           <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -587,108 +475,19 @@ export default function PageContent({ meeting }: { meeting: any }) {
                       </svg>
                     </button>
                   </>
-                    )}
-                    </div>
-                  </div>
-                </div>
-                  {/* Transcript content */}
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Transcript content */}
           <div className="flex-1 overflow-y-auto pb-32">
             <TranscriptView transcripts={transcripts} />
           </div>
-
-          {/* Model Settings Modal */}
-          {showModelSettings && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Model Settings</h3>
-                  <button
-                    onClick={() => setShowModelSettings(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Summarization Model
-                    </label>
-                    <div className="flex space-x-2">
-                      <select
-                        className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        value={modelConfig.provider}
-                        onChange={(e) => {
-                          const provider = e.target.value as ModelConfig['provider'];
-                          setModelConfig({
-                            ...modelConfig,
-                            provider,
-                            model: modelOptions[provider][0]
-                          });
-                        }}
-                      >
-                        <option value="claude">Claude</option>
-                        <option value="groq">Groq</option>
-                        <option value="ollama">Ollama</option>
-                      </select>
-
-                      <select
-                        className="flex-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        value={modelConfig.model}
-                        onChange={(e) => setModelConfig(prev => ({ ...prev, model: e.target.value }))}
-                      >
-                        {modelOptions[modelConfig.provider].map(model => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  {modelConfig.provider === 'ollama' && (
-                    <div>
-                      <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
-                      {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                          {error}
-                        </div>
-                      )}
-                      <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
-                        {models.map((model) => (
-                          <div 
-                            key={model.id}
-                            className={`bg-white p-4 rounded-lg shadow cursor-pointer transition-colors ${
-                              modelConfig.model === model.name ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
-                            }`}
-                            onClick={() => setModelConfig(prev => ({ ...prev, model: model.name }))}
-                          >
-                            <h3 className="font-bold">{model.name}</h3>
-                            <p className="text-gray-600">Size: {model.size}</p>
-                            <p className="text-gray-600">Modified: {model.modified}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button
-                    onClick={() => setShowModelSettings(false)}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-         {/* Right side - AI Summary */}
-         <div className="flex-1 overflow-y-auto bg-white">
+        {/* Right side - AI Summary */}
+        <div className="flex-1 overflow-y-auto bg-white">
           {isSummaryLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -696,7 +495,7 @@ export default function PageContent({ meeting }: { meeting: any }) {
                 <p className="text-gray-600">Generating AI Summary...</p>
               </div>
             </div>
-          ) : showSummary && (
+          ) : transcripts?.length > 0 && (
             <div className="max-w-4xl mx-auto p-6">
               {summaryResponse && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg p-4 max-h-1/3 overflow-y-auto">
@@ -749,7 +548,9 @@ export default function PageContent({ meeting }: { meeting: any }) {
                   status={summaryStatus} 
                   error={summaryError}
                   onSummaryChange={(newSummary) => setAiSummary(newSummary)}
-                  onRegenerateSummary={handleRegenerateSummary}
+                  onRegenerateSummary={() => {
+                    handleRegenerateSummary();
+                  }}
                 />
               </div>
               {summaryStatus !== 'idle' && (
@@ -764,7 +565,99 @@ export default function PageContent({ meeting }: { meeting: any }) {
             </div>
           )}
         </div>
+
+        {/* Model Settings Modal */}
+        {showModelSettings && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Model Settings</h3>
+                <button
+                  onClick={() => setShowModelSettings(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Summarization Model
+                  </label>
+                  <div className="flex space-x-2">
+                    <select
+                      className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      value={modelConfig.provider}
+                      onChange={(e) => {
+                        const provider = e.target.value as ModelConfig['provider'];
+                        setModelConfig({
+                          ...modelConfig,
+                          provider,
+                          model: modelOptions[provider][0]
+                        });
+                      }}
+                    >
+                      <option value="claude">Claude</option>
+                      <option value="groq">Groq</option>
+                      <option value="ollama">Ollama</option>
+                    </select>
+
+                    <select
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      value={modelConfig.model}
+                      onChange={(e) => setModelConfig(prev => ({ ...prev, model: e.target.value }))}
+                    >
+                      {modelOptions[modelConfig.provider].map(model => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {modelConfig.provider === 'ollama' && (
+                  <div>
+                    <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
+                    {error && (
+                      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                        {error}
+                      </div>
+                    )}
+                    <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
+                      {models.map((model) => (
+                        <div 
+                          key={model.id}
+                          className={`bg-white p-4 rounded-lg shadow cursor-pointer transition-colors ${
+                            modelConfig.model === model.name ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                          }`}
+                          onClick={() => setModelConfig(prev => ({ ...prev, model: model.name }))}
+                        >
+                          <h3 className="font-bold">{model.name}</h3>
+                          <p className="text-gray-600">Size: {model.size}</p>
+                          <p className="text-gray-600">Modified: {model.modified}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowModelSettings(false)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
   );
 }
 
