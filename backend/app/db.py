@@ -106,37 +106,37 @@ class DatabaseManager:
             await conn.execute(query, params)
             await conn.commit()
 
-    async def get_process(self, process_id: str) -> Optional[Dict[str, Any]]:
-        """Get a process by its ID"""
-        async with self._get_connection() as conn:
-            async with conn.execute(
-                "SELECT id, status, created_at, updated_at, result, error, start_time, end_time, chunk_count, processing_time, metadata FROM summary_processes WHERE id = ?",
-                (process_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
+    # async def get_process(self, process_id: str) -> Optional[Dict[str, Any]]:
+    #     """Get a process by its ID"""
+    #     async with self._get_connection() as conn:
+    #         async with conn.execute(
+    #             "SELECT id, status, created_at, updated_at, result, error, start_time, end_time, chunk_count, processing_time, metadata FROM summary_processes WHERE id = ?",
+    #             (process_id,)
+    #         ) as cursor:
+    #             row = await cursor.fetchone()
                 
-                if not row:
-                    return None
+    #             if not row:
+    #                 return None
                     
-                result = {
-                    "id": row[0],
-                    "status": row[1],
-                    "created_at": row[2],
-                    "updated_at": row[3],
-                    "start_time": row[6],
-                    "end_time": row[7],
-                    "chunk_count": row[8],
-                    "processing_time": row[9]
-                }
+    #             result = {
+    #                 "id": row[0],
+    #                 "status": row[1],
+    #                 "created_at": row[2],
+    #                 "updated_at": row[3],
+    #                 "start_time": row[6],
+    #                 "end_time": row[7],
+    #                 "chunk_count": row[8],
+    #                 "processing_time": row[9]
+    #             }
                 
-                if row[4]:  # result
-                    result["result"] = json.loads(row[4])
-                if row[5]:  # error
-                    result["error"] = row[5]
-                if row[10]:  # metadata
-                    result["metadata"] = json.loads(row[10])
+    #             if row[4]:  # result
+    #                 result["result"] = json.loads(row[4])
+    #             if row[5]:  # error
+    #                 result["error"] = row[5]
+    #             if row[10]:  # metadata
+    #                 result["metadata"] = json.loads(row[10])
                     
-                return result
+    #             return result
 
     async def save_transcript(self, process_id: str, transcript_text: str, model: str, model_name: str, 
                             chunk_size: int, overlap: int):
@@ -171,13 +171,13 @@ class DatabaseManager:
                     return dict(zip([col[0] for col in cursor.description], row))
                 return None
 
-    async def cleanup_old_processes(self, hours: int = 24):
-        """Clean up processes older than specified hours"""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    # async def cleanup_old_processes(self, hours: int = 24):
+    #     """Clean up processes older than specified hours"""
+    #     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
         
-        async with self._get_connection() as conn:
-            await conn.execute(
-                "DELETE FROM summary_processes WHERE created_at < ?",
-                (cutoff,)
-            )
-            await conn.commit()
+    #     async with self._get_connection() as conn:
+    #         await conn.execute(
+    #             "DELETE FROM summary_processes WHERE created_at < ?",
+    #             (cutoff,)
+    #         )
+    #         await conn.commit()
