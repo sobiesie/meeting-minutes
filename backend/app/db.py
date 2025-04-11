@@ -25,7 +25,7 @@ class DatabaseManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS meetings (
                     id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -365,12 +365,13 @@ class DatabaseManager:
         """Get all meetings with basic information"""
         async with self._get_connection() as conn:
             cursor = await conn.execute("""
-                SELECT id, title
+                SELECT id, title, created_at
                 FROM meetings
                 ORDER BY created_at DESC
             """)
             rows = await cursor.fetchall()
             return [{
                 'id': row[0],
-                'title': row[1]
+                'title': row[1],
+                'created_at': row[2]
             } for row in rows]

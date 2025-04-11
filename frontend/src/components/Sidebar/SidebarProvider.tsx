@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+
 
 interface SidebarItem {
   id: string;
@@ -34,10 +35,12 @@ export const useSidebar = () => {
 };
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>(null);
+  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: 'New Call' });
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const pathname = usePathname();
+  const router = useRouter();
+  const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -57,6 +60,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
           title: meeting.title
         }));
         setMeetings(transformedMeetings);
+        router.push('/')
       } catch (error) {
         console.error('Error fetching meetings:', error);
         setMeetings([]);
@@ -71,8 +75,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       title: 'Meetings',
       type: 'folder' as const,
       children: [
-        // { id: 'team-sync-dec-26', title: 'Team Sync - Dec 26', type: 'file' as const },
-        // { id: 'product-review', title: 'Product Review', type: 'file' as const },
+        { id: 'intro-call', title: 'New Call', type: 'file' as const },
         ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
       ]
     },
@@ -87,19 +90,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     }
   ];
 
-  const sidebarItems: SidebarItem[] = baseItems.map(item => {
-    if (item.id === 'meetings' && currentMeeting) {
-      const newItem: SidebarItem = {
-        ...item,
-        children: [
-          { id: currentMeeting.id, title: currentMeeting.title, type: 'file' as const },
-          ...(item.children || []).filter(child => child.id !== currentMeeting.id)
-        ]
-      };
-      return newItem;
-    }
-    return item;
-  });
+ 
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -109,8 +100,21 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname === '/') {
       setCurrentMeeting({ id: 'intro-call', title: 'New Call' });
+    } else if (pathname === '/meeting-details' && meetings.length > 0) {
+      // Find the current meeting from the meetings list
+      const currentPath = window.location.pathname;
+      const searchParams = new URLSearchParams(window.location.search);
+      const meetingId = searchParams.get('id');
+      
+      if (meetingId) {
+        const meeting = meetings.find(m => m.id === meetingId);
+        if (meeting) {
+          setCurrentMeeting({ id: meeting.id, title: meeting.title });
+        }
+      }
     }
-  }, [pathname]);
+    setSidebarItems(baseItems);
+  }, [pathname, meetings]);
 
   return (
     <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse }}>

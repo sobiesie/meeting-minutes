@@ -14,7 +14,7 @@ interface SidebarItem {
 
 const Sidebar: React.FC = () => {
   const router = useRouter();
-  const { sidebarItems, isCollapsed, toggleCollapse } = useSidebar();
+  const { sidebarItems, isCollapsed, toggleCollapse, setCurrentMeeting, currentMeeting } = useSidebar();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings', 'notes']));
 
   const toggleFolder = (folderId: string) => {
@@ -66,19 +66,24 @@ const Sidebar: React.FC = () => {
   const renderItem = (item: SidebarItem, depth = 0) => {
     const isExpanded = expandedFolders.has(item.id);
     const paddingLeft = `${depth * 12 + 12}px`;
+    const isActive = item.type === 'file' && currentMeeting?.id === item.id;
 
     if (isCollapsed) return null;
 
     return (
       <div key={item.id}>
         <div
-          className="flex items-center px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm"
+          className={`flex items-center px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
+            isActive ? 'bg-gray-100  font-medium' : ''
+          }`}
           style={{ paddingLeft }}
           onClick={() => {
             if (item.type === 'folder') {
               toggleFolder(item.id);
             } else {
-              const basePath = item.id.startsWith('intro-call') ? '/' : `/${item.id.includes('-') ? 'meetings' : 'notes'}/${item.id}`;
+              setCurrentMeeting({ id: item.id, title: item.title });
+              const basePath = item.id.startsWith('intro-call') ? '/' : 
+                item.id.includes('-') ? '/meeting-details' : `/notes/${item.id}`;
               router.push(basePath);
             }
           }}

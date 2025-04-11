@@ -12,6 +12,8 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { downloadDir } from '@tauri-apps/api/path';
 import { listenerCount } from 'process';
 import { invoke } from '@tauri-apps/api/core';
+import { useNavigation } from '@/hooks/useNavigation';
+import { useRouter } from 'next/navigation';
 
 interface TranscriptUpdate {
   text: string;
@@ -49,21 +51,21 @@ export default function Home() {
     main_topics: { title: "Main Topics", blocks: [] }
   });
   const [summaryResponse, setSummaryResponse] = useState<SummaryResponse | null>(null);
-
   const [isCollapsed, setIsCollapsed] = useState(false);
-
   const [summaryError, setSummaryError] = useState<string | null>(null);
-
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
     model: 'llama3.2:latest',
     whisperModel: 'large-v3'
   });
-
   const [originalTranscript, setOriginalTranscript] = useState<string>('');
-
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState<string>('');
+  const [showModelSettings, setShowModelSettings] = useState(false);
+
+  const { setCurrentMeeting } = useSidebar();
+  const handleNavigation = useNavigation('', ''); // Initialize with empty values
+  const router = useRouter();
 
   const modelOptions = {
     ollama: models.map(model => model.name),
@@ -112,10 +114,6 @@ export default function Home() {
     'large-v3-turbo-q5_0',
     'large-v3-turbo-q8_0'
   ];
-
-  const [showModelSettings, setShowModelSettings] = useState(false);
-
-  const { setCurrentMeeting } = useSidebar();
 
   useEffect(() => {
     setCurrentMeeting({ id: 'intro-call', title: meetingTitle });
@@ -334,24 +332,30 @@ export default function Home() {
 
       // Save to SQLite
       if (isCallApi) {
-      const response = await fetch('http://localhost:5167/save-transcript', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          meeting_title: meetingTitle,
-          transcripts: transcripts
-        })
-      });
+        const response = await fetch('http://localhost:5167/save-transcript', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            meeting_title: meetingTitle,
+            transcripts: transcripts
+          })
+        });
 
-      if (!response.ok) {
-        setIsRecording(false);
-        throw new Error('Failed to save transcript to database');
-       
+        if (!response.ok) {
+          setIsRecording(false);
+          throw new Error('Failed to save transcript to database');
+        }
 
+        const responseData = await response.json();
+        const meetingId = responseData.meeting_id;
+        
+        // Set current meeting and navigate
+        setCurrentMeeting({ id: meetingId, title: meetingTitle });
+
+        router.push('/meeting-details');
       }
-    }
 
       setIsRecording(false);
       
@@ -362,15 +366,7 @@ export default function Home() {
         console.log('No transcript content available');
       }
     } catch (error) {
-      console.error('Failed to stop recording:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-        });
-      }
-      alert('Failed to stop recording. Check console for details.');
+      console.error('Error in handleRecordingStop2:', error);
       setIsRecording(false);
     }
   };
@@ -433,6 +429,7 @@ export default function Home() {
 
       const { process_id } = await response.json();
       console.log('Process ID:', process_id);
+   
 
       // Poll for summary status
       const pollInterval = setInterval(async () => {
