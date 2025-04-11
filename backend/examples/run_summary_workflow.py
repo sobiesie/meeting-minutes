@@ -1,3 +1,24 @@
+"""
+Example Script: Transcript Summarization Workflow Simulation
+
+This script demonstrates and tests the backend API workflow for processing
+and summarizing a text transcript, simulating the sequence of calls typically
+made by a frontend application.
+
+Workflow:
+1. Reads a transcript from a local file.
+2. Sends the transcript text to the `/process-transcript` endpoint (POST).
+3. Receives a `process_id` for the asynchronous task.
+4. Polls the `/get-summary/{process_id}` endpoint (GET) periodically.
+5. Waits until the status is 'completed' or 'error', or until polling times out.
+6. Prints the final summary result or an error message.
+
+Usage:
+    python examples/run_summary_workflow.py <path_to_transcript.txt> [options]
+
+Run with --help for detailed options regarding API URL, model selection,
+polling parameters, etc.
+"""
 import requests
 import time
 import argparse
