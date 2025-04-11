@@ -1,6 +1,7 @@
 import { Clock, Users, Calendar, Tag } from 'lucide-react';
 import { EditableTitle } from '@/components/EditableTitle';
 import PageContent from '../page-content';
+import { Summary, } from '@/types';
 
 
 interface PageProps {
@@ -69,9 +70,43 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       'Expires': '0'
     }
   });
+  const summaryResponse = await fetch(`http://localhost:5167/get-summary/${id}`, {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
+  const summary = await summaryResponse.json();
   const meeting = await response.json();
+  
+  // Handle case where summary data is null
+  const summaryData = summary.data || {};
+  const { MeetingName, ...restSummaryData } = summaryData;
+  
+  // Format the summary data with consistent styling
+  const formattedSummary = Object.entries(restSummaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
+    acc[key] = {
+      title: section?.title || key,
+      blocks: (section?.blocks || []).map((block: any) => ({
+        ...block,
+        type: 'bullet',
+        color: 'default',
+        content: block.content.trim() // Remove trailing newlines
+      }))
+    };
+    return acc;
+  }, {} as Summary);
+
   console.log('Meeting details received:', meeting);
-  return <PageContent meeting={meeting} />
+  const sampleSummary = {
+    key_points: { title: "Key Points", blocks: [] },
+    action_items: { title: "Action Items", blocks: [] },
+    decisions: { title: "Decisions", blocks: [] },
+    main_topics: { title: "Main Topics", blocks: [] }
+  };
+  return <PageContent meeting={meeting} summaryData={formattedSummary || sampleSummary} />
 }
 
   // const [transcripts, setTranscripts] = useState<Transcript[]>([]);

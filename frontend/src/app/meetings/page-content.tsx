@@ -21,18 +21,13 @@ interface OllamaModel {
   modified: string;
 }
 
-export default function PageContent({ meeting }: { meeting: any }) {
+export default function PageContent({ meeting, summaryData }: { meeting: any, summaryData: Summary }) {
   const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
   const [meetingTitle, setMeetingTitle] = useState(meeting.title || 'New Call');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [aiSummary, setAiSummary] = useState<Summary | null>({
-    key_points: { title: "Key Points", blocks: [] },
-    action_items: { title: "Action Items", blocks: [] },
-    decisions: { title: "Decisions", blocks: [] },
-    main_topics: { title: "Main Topics", blocks: [] }
-  });
+  const [aiSummary, setAiSummary] = useState<Summary | null>(summaryData);
   const [summaryResponse, setSummaryResponse] = useState<SummaryResponse | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
