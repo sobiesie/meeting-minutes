@@ -2,7 +2,6 @@ pydantic==2.11.3
 pydantic-ai==0.0.19
 pandas==2.2.3
 devtools==0.12.2
-chromadb==1.0.3
 python-dotenv==1.1.0
 fastapi==0.115.9
 uvicorn==0.34.0

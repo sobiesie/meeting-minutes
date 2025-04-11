@@ -74,8 +74,6 @@ class SummaryProcessor:
 
             logger.info("Initializing SummaryProcessor components")
             self.transcript_processor = TranscriptProcessor()
-            self.collection = None
-            # self.final_summary_result = None # Related to unused save_final_summary_result tool
             logger.info("SummaryProcessor initialized successfully (core components)")
         except Exception as e:
             logger.error(f"Failed to initialize SummaryProcessor: {str(e)}", exc_info=True)
@@ -100,13 +98,6 @@ class SummaryProcessor:
             step_size = chunk_size - overlap
             if step_size <= 0:
                 chunk_size = overlap + 1  # Adjust chunk_size to ensure positive step
-
-            logger.info("Initializing ChromaDB collection")
-            self.transcript_processor.initialize_collection()
-            self.collection = self.transcript_processor.collection
-
-            if not self.collection:
-                raise ValueError("Failed to initialize ChromaDB collection")
 
             logger.info(f"Processing transcript of length {len(text)} with chunk_size={chunk_size}, overlap={overlap}")
             # Pass text as positional arg, chunk_size and overlap as keyword args
