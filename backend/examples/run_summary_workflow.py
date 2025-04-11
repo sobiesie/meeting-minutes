@@ -14,7 +14,7 @@ Workflow:
 6. Prints the final summary result or an error message.
 
 Usage:
-    python examples/run_summary_workflow.py <path_to_transcript.txt> [options]
+    python run_summary_workflow.py <path_to_transcript.txt> [options]
 
 Run with --help for detailed options regarding API URL, model selection,
 polling parameters, etc.
