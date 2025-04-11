@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from db import DatabaseManager
 import json
 from threading import Lock
-from Process_transcrip import TranscriptProcessor
+from transcript_processor import TranscriptProcessor
 
 # Load environment variables
 load_dotenv()
