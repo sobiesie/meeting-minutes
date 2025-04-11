@@ -157,3 +157,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("Script finished.")
+
+# Before runnining, please configure the api key for the model provider used in an .env file.
+# And RUN `python run_summary_workflow.py transcript.txt` 
