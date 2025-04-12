@@ -14,6 +14,7 @@ import { listenerCount } from 'process';
 import { invoke } from '@tauri-apps/api/core';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useRouter } from 'next/navigation';
+import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 
 interface TranscriptUpdate {
   text: string;
@@ -63,7 +64,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
 
-  const { setCurrentMeeting } = useSidebar();
+  const { setCurrentMeeting, setMeetings ,meetings} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
 
@@ -350,6 +351,7 @@ export default function Home() {
 
         const responseData = await response.json();
         const meetingId = responseData.meeting_id;
+        setMeetings((prev: CurrentMeeting[]) => [{ id: meetingId, title: meetingTitle }, ...prev]);
         
         // Set current meeting and navigate
         setCurrentMeeting({ id: meetingId, title: meetingTitle });

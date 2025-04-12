@@ -11,7 +11,7 @@ interface SidebarItem {
   children?: SidebarItem[];
 }
 
-interface CurrentMeeting {
+export interface CurrentMeeting {
   id: string;
   title: string;
 }
@@ -22,6 +22,8 @@ interface SidebarContextType {
   sidebarItems: SidebarItem[];
   isCollapsed: boolean;
   toggleCollapse: () => void;
+  meetings: CurrentMeeting[];
+  setMeetings: React.Dispatch<React.SetStateAction<CurrentMeeting[]>>;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -100,24 +102,17 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname === '/') {
       setCurrentMeeting({ id: 'intro-call', title: 'New Call' });
-    } else if (pathname === '/meeting-details' && meetings.length > 0) {
-      // Find the current meeting from the meetings list
-      const currentPath = window.location.pathname;
-      const searchParams = new URLSearchParams(window.location.search);
-      const meetingId = searchParams.get('id');
-      
-      if (meetingId) {
-        const meeting = meetings.find(m => m.id === meetingId);
-        if (meeting) {
-          setCurrentMeeting({ id: meeting.id, title: meeting.title });
-        }
-      }
     }
     setSidebarItems(baseItems);
-  }, [pathname, meetings]);
+  }, [pathname]);
+
+  // Update sidebar items when meetings change
+  useEffect(() => {
+    setSidebarItems(baseItems);
+  }, [meetings]);
 
   return (
-    <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse }}>
+    <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse, meetings, setMeetings }}>
       {children}
     </SidebarContext.Provider>
   );
