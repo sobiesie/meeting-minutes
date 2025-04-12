@@ -375,3 +375,6 @@ class DatabaseManager:
                 'title': row[1],
                 'created_at': row[2]
             } for row in rows]
+
+            
+    

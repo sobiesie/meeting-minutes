@@ -4,7 +4,7 @@ import { Transcript, Summary, SummaryResponse } from '@/types';
 import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
 import { AISummary } from '@/components/AISummary';
-import { useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { CurrentMeeting, useSidebar } from '@/components/Sidebar/SidebarProvider';
 
 interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude';
@@ -40,7 +40,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
-
+  const { setCurrentMeeting, setMeetings } = useSidebar();
   const modelOptions = {
     ollama: models.map(model => model.name),
     claude: ['claude-3-5-sonnet-latest'],
@@ -56,7 +56,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     }
   }, [models]);
 
-  const { setCurrentMeeting } = useSidebar();
+  
 
   useEffect(() => {
     setCurrentMeeting({ id: meeting.id, title: meetingTitle });
@@ -177,7 +177,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
             // Update meeting title if available
             if (MeetingName) {
-              setMeetingTitle(MeetingName);
+              // setMeetingTitle(MeetingName);
+              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: meetingTitle } : m));
+              setCurrentMeeting({ id: meeting.id, title: meetingTitle });
             }
             
             // Format the summary data with consistent styling
@@ -390,6 +392,49 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     }
   }, [transcripts, generateAISummary]);
 
+  const handleSaveMeetingTitle = async () => {
+    try {
+      const payload = {
+        meeting_id: meeting.id,
+        title: meetingTitle
+      };
+      console.log('Saving meeting title with payload:', payload);
+      
+      const response = await fetch('http://localhost:5167/save-meeting-title', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Save meeting title failed:', errorData);
+        console.error('Response status:', response.status);
+        throw new Error(errorData.error || 'Failed to save meeting title');
+      }
+      
+      const responseData = await response.json();
+      console.log('Save meeting title success:', responseData);
+      
+      setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: meetingTitle } : m));
+      setCurrentMeeting({ id: meeting.id, title: meetingTitle });
+    } catch (error) {
+      console.error('Failed to save meeting title:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Failed to save meeting title: Unknown error');
+      }
+    }
+  };
+
+
+
+
+  
+
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
 
   return (
@@ -405,7 +450,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                   title={meetingTitle}
                   isEditing={isEditingTitle}
                   onStartEditing={() => setIsEditingTitle(true)}
-                  onFinishEditing={() => setIsEditingTitle(false)}
+                  onFinishEditing={() => {
+                    setIsEditingTitle(false);
+                    handleSaveMeetingTitle();
+                  }}
                   onChange={handleTitleChange}
                 />
               </div>

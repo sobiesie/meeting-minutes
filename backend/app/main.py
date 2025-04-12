@@ -77,6 +77,10 @@ class MeetingDetailsResponse(BaseModel):
     updated_at: str
     transcripts: List[Transcript]
 
+class MeetingTitleUpdate(BaseModel):
+    meeting_id: str
+    title: str
+
 @app.get("/get-meetings", response_model=List[MeetingResponse])
 async def get_meetings():
     """Get all meetings with their basic information"""
@@ -100,6 +104,16 @@ async def get_meeting(meeting_id: str):
         raise
     except Exception as e:
         logger.error(f"Error getting meeting: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/save-meeting-title")
+async def save_meeting_title(data: MeetingTitleUpdate):
+    """Save a meeting title"""
+    try:
+        await db.update_meeting_title(data.meeting_id, data.title)
+        return {"message": "Meeting title saved successfully"}
+    except Exception as e:
+        logger.error(f"Error saving meeting title: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 class TranscriptRequest(BaseModel):
