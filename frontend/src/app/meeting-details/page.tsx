@@ -24,13 +24,13 @@ export default function MeetingDetails() {
   const { currentMeeting } = useSidebar();
   const router = useRouter();
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
-  const [meetingSummary, setMeetingSummary] = useState<Summary>(sampleSummary);
+  const [meetingSummary, setMeetingSummary] = useState<Summary|null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Reset states when currentMeeting changes
   useEffect(() => {
     setMeetingDetails(null);
-    setMeetingSummary(sampleSummary);
+    setMeetingSummary(null);
     setError(null);
   }, [currentMeeting?.id]);
 
@@ -107,7 +107,7 @@ export default function MeetingDetails() {
   //   );
   // }
 
-  if (!meetingDetails) {
+  if (!meetingDetails || !meetingSummary) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
