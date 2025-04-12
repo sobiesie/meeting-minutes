@@ -81,6 +81,9 @@ class MeetingTitleUpdate(BaseModel):
     meeting_id: str
     title: str
 
+class DeleteMeetingRequest(BaseModel):
+    meeting_id: str
+
 @app.get("/get-meetings", response_model=List[MeetingResponse])
 async def get_meetings():
     """Get all meetings with their basic information"""
@@ -114,6 +117,19 @@ async def save_meeting_title(data: MeetingTitleUpdate):
         return {"message": "Meeting title saved successfully"}
     except Exception as e:
         logger.error(f"Error saving meeting title: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete-meeting")
+async def delete_meeting(data: DeleteMeetingRequest):
+    """Delete a meeting and all its associated data"""
+    try:
+        success = await db.delete_meeting(data.meeting_id)
+        if success:
+            return {"message": "Meeting deleted successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete meeting")
+    except Exception as e:
+        logger.error(f"Error deleting meeting: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 class TranscriptRequest(BaseModel):

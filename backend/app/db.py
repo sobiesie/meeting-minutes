@@ -253,7 +253,7 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 
                 # Check if meeting exists
-                cursor.execute("SELECT id FROM meetings WHERE id = ?", (meeting_id,))
+                cursor.execute("SELECT id FROM meetings WHERE id = ? OR title = ?", (meeting_id, title))
                 existing_meeting = cursor.fetchone()
                 
                 if not existing_meeting:
@@ -263,13 +263,14 @@ class DatabaseManager:
                         VALUES (?, ?, datetime('now'), datetime('now'))
                     """, (meeting_id, title))
                 else:
-                    # Update meeting title if needed
-                    cursor.execute("""
-                        UPDATE meetings 
-                        SET title = ?, updated_at = datetime('now')
-                        WHERE id = ?
-                    """, (title, meeting_id))
-                
+                    # # Update meeting title if needed
+                    # cursor.execute("""
+                    #     UPDATE meetings 
+                    #     SET title = ?, updated_at = datetime('now')
+                    #     WHERE id = ?
+                    # """, (title, meeting_id))
+                    # If we get here and meeting exists, throw error since we don't want duplicates
+                    raise Exception(f"Meeting with ID {meeting_id} already exists")
                 conn.commit()
                 return True
         except Exception as e:
@@ -375,6 +376,28 @@ class DatabaseManager:
                 'title': row[1],
                 'created_at': row[2]
             } for row in rows]
+
+    async def delete_meeting(self, meeting_id: str):
+        """Delete a meeting and all its associated data"""
+        async with self._get_connection() as conn:
+            try:
+                # Delete from transcript_chunks
+                await conn.execute("DELETE FROM transcript_chunks WHERE meeting_id = ?", (meeting_id,))
+                
+                # Delete from summary_processes
+                await conn.execute("DELETE FROM summary_processes WHERE meeting_id = ?", (meeting_id,))
+                
+                # Delete from transcripts
+                await conn.execute("DELETE FROM transcripts WHERE meeting_id = ?", (meeting_id,))
+                
+                # Delete from meetings
+                await conn.execute("DELETE FROM meetings WHERE id = ?", (meeting_id,))
+                
+                await conn.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Error deleting meeting {meeting_id}: {str(e)}")
+                return False
 
             
     
