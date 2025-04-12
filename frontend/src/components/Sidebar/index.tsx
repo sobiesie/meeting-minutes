@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Delete } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
+import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 
 interface SidebarItem {
   id: string;
@@ -14,7 +15,7 @@ interface SidebarItem {
 
 const Sidebar: React.FC = () => {
   const router = useRouter();
-  const { sidebarItems, isCollapsed, toggleCollapse, setCurrentMeeting, currentMeeting } = useSidebar();
+  const { sidebarItems, isCollapsed, toggleCollapse, setCurrentMeeting, currentMeeting, setMeetings } = useSidebar();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings', 'notes']));
 
   const toggleFolder = (folderId: string) => {
@@ -32,13 +33,13 @@ const Sidebar: React.FC = () => {
 
     return (
       <div className="flex flex-col items-center space-y-4 mt-4">
-        <button
+        {/* <button
           onClick={() => router.push('/')}
           className="p-2 hover:bg-gray-100 rounded-md transition-colors"
           title="Home"
         >
           <Home className="w-5 h-5 text-gray-600" />
-        </button>
+        </button> */}
         <button
           onClick={() => {
             if (isCollapsed) toggleCollapse();
@@ -70,10 +71,38 @@ const Sidebar: React.FC = () => {
 
     if (isCollapsed) return null;
 
+    const handleDelete = async (itemId: string) => {
+      console.log('Deleting item:', itemId);
+      const payload = {
+        meeting_id: itemId
+      };
+     const response =  await fetch('http://localhost:5167/delete-meeting', {
+        cache: 'no-store',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        console.log('Meeting deleted successfully');
+        setMeetings((prev: CurrentMeeting[]) => prev.filter(m => m.id !== itemId));
+        
+        // If deleting the active meeting, navigate to home
+        if (currentMeeting?.id === itemId) {
+          setCurrentMeeting({ id: 'intro-call', title: 'New Call' });
+          router.push('/');
+        }
+      } else {
+        console.error('Failed to delete meeting');
+      }
+    };
+
     return (
       <div key={item.id}>
         <div
-          className={`flex items-center px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
+          className={`flex items-center px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm group ${
             isActive ? 'bg-gray-100  font-medium' : ''
           }`}
           style={{ paddingLeft }}
@@ -88,6 +117,7 @@ const Sidebar: React.FC = () => {
             }
           }}
         >
+          
           {item.type === 'folder' ? (
             <>
               {item.id === 'meetings' ? (
@@ -103,10 +133,23 @@ const Sidebar: React.FC = () => {
               {item.title}
             </>
           ) : (
-            <>
-              <File className="w-4 h-4 mr-1" />
-              {item.title}
-            </>
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <File className="w-4 h-4 mr-1" />
+                {item.title}
+              </div>
+              {item.id.includes('-') && !item.id.startsWith('intro-call') && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(item.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 hover:text-red-600 p-1 rounded-md hover:bg-red-50"
+                >
+                  <Delete className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           )}
         </div>
         {item.type === 'folder' && isExpanded && item.children && (
@@ -153,7 +196,7 @@ const Sidebar: React.FC = () => {
 
         {/* Main content */}
         <div className="flex-1 overflow-y-auto">
-          {!isCollapsed && (
+          {/* {!isCollapsed && (
             <div className="p-2">
               <button
                 onClick={() => router.push('/')}
@@ -163,7 +206,7 @@ const Sidebar: React.FC = () => {
                 <span>Home</span>
               </button>
             </div>
-          )}
+          )} */}
           {renderCollapsedIcons()}
           {sidebarItems.map(item => renderItem(item))}
         </div>

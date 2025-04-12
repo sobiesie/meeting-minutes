@@ -58,9 +58,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
   
 
-  useEffect(() => {
-    setCurrentMeeting({ id: meeting.id, title: meetingTitle });
-  }, [meetingTitle, setCurrentMeeting, meeting.id]);
+  // useEffect(() => {
+  //   setCurrentMeeting({ id: meeting.id, title: meetingTitle });
+  // }, [meetingTitle, setCurrentMeeting, meeting.id]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -177,9 +177,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
             // Update meeting title if available
             if (MeetingName) {
-              // setMeetingTitle(MeetingName);
-              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: meetingTitle } : m));
-              setCurrentMeeting({ id: meeting.id, title: meetingTitle });
+              setMeetingTitle(MeetingName);
+              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: MeetingName } : m));
+              setCurrentMeeting({ id: meeting.id, title: MeetingName });
             }
             
             // Format the summary data with consistent styling
@@ -319,6 +319,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             // Update meeting title if available
             if (MeetingName) {
               setMeetingTitle(MeetingName);
+              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: MeetingName } : m));
+              setCurrentMeeting({ id: meeting.id, title: MeetingName });
             }
 
             // Format the summary data with consistent styling
