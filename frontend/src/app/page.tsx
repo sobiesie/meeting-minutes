@@ -43,7 +43,7 @@ export default function Home() {
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
   const [barHeights, setBarHeights] = useState(['58%', '76%', '58%']);
-  const [meetingTitle, setMeetingTitle] = useState('New Call');
+  const [meetingTitle, setMeetingTitle] = useState('+ New Call');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [aiSummary, setAiSummary] = useState<Summary | null>({
     key_points: { title: "Key Points", blocks: [] },

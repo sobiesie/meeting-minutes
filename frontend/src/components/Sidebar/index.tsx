@@ -41,7 +41,7 @@ const Sidebar: React.FC = () => {
       
       // If deleting the active meeting, navigate to home
       if (currentMeeting?.id === itemId) {
-        setCurrentMeeting({ id: 'intro-call', title: 'New Call' });
+        setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
         router.push('/');
       }
     } else {
@@ -200,7 +200,7 @@ const Sidebar: React.FC = () => {
           {/* Title container */}
           <div className="flex-1">
             {!isCollapsed && (
-              <h1 className="font-semibold text-sm">Meeting Minutes</h1>
+              <h1 className="font-semibold text-sm">Meetily</h1>
             )}
           </div>
         </div>

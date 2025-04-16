@@ -25,7 +25,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
-  const [meetingTitle, setMeetingTitle] = useState(meeting.title || 'New Call');
+  const [meetingTitle, setMeetingTitle] = useState(meeting.title || '+ New Call');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [aiSummary, setAiSummary] = useState<Summary | null>(summaryData);
   const [summaryResponse, setSummaryResponse] = useState<SummaryResponse | null>(null);

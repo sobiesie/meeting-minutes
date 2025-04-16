@@ -39,7 +39,7 @@ export const useSidebar = () => {
 };
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: 'New Call' });
+  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const pathname = usePathname();
@@ -80,7 +80,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       title: 'Meetings',
       type: 'folder' as const,
       children: [
-        { id: 'intro-call', title: 'New Call', type: 'file' as const },
+        { id: 'intro-call', title: '+ New Call', type: 'file' as const },
         ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
       ]
     },
@@ -104,7 +104,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // Update current meeting when on home page
   useEffect(() => {
     if (pathname === '/') {
-      setCurrentMeeting({ id: 'intro-call', title: 'New Call' });
+      setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
     }
     setSidebarItems(baseItems);
   }, [pathname]);
