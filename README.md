@@ -1,6 +1,6 @@
 <div align="center" style="border-bottom: none">
     <h1>
-        <img src="docs/2.png" width="700"  style="border-radius: 10px;" />
+        <img src="docs/2.png" width="250"   />
         <br>
         Meetily - AI-Powered Meeting Assistant
     </h1>
