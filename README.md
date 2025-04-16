@@ -1,12 +1,12 @@
 <div align="center" style="border-bottom: none">
     <h1>
-        <img src="docs/6.png" width="400" style="border-radius: 10px;" />
+        <img src="docs/2.png" width="700"  style="border-radius: 10px;" />
         <br>
         Meetily - AI-Powered Meeting Assistant
     </h1>
     <br>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Pre_Release-v0.0.3-brightgreen" alt="Pre-Release"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-1000+-red" alt="Stars"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Pre_Release-v0.0.4-brightgreen" alt="Pre-Release"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-3k+-red" alt="Stars"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-yellow" alt="Supported OS"></a>
     <br>
@@ -15,8 +15,9 @@
     Open source Ai Assistant for taking meeting notes
     </h3>
     <p align="center">
+    Get latest <a href="https://www.zackriya.com/meetily-subscribe/"><b>Product updates</b></a> <br><br>
     <a href="https://meetily.zackriya.com"><b>Website</b></a> •
-    <a href="https://in.linkedin.com/company/zackriya-solutions"><b>Author</b></a>
+    <a href="https://in.linkedin.com/company/zackriya-solutions"><b>Authors</b></a>
     •
     <a href="https://discord.gg/crRymMQBFH"><b>Discord Channel</b></a>
 </p>
@@ -284,6 +285,12 @@ MIT License - Feel free to use this project for your own purposes.
 We are planning to add a subscription option so that you don't have to run the backend on your own server. This will help you scale better and run the service 24/7. This is based on a few requests we received. If you are interested, please fill out the form [here](http://zackriya.com/aimeeting/).
 
 Last updated: March 3, 2025
+
+## Acknowledgments
+
+- We borrowes some code from [Whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+- We borrowes some code from [Screenpipe](https://github.com/mediar-ai/screenpipe)
+
 
 ## Star History
 
