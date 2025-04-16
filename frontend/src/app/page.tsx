@@ -64,7 +64,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
 
-  const { setCurrentMeeting, setMeetings ,meetings} = useSidebar();
+  const { setCurrentMeeting, setMeetings ,meetings, isMeetingActive, setIsMeetingActive} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
 
@@ -248,6 +248,7 @@ export default function Home() {
       console.log('Recording started successfully');
       setIsRecording(true);
       setTranscripts([]); // Clear previous transcripts when starting new recording
+      setIsMeetingActive(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
       alert('Failed to start recording. Check console for details.');
@@ -355,7 +356,7 @@ export default function Home() {
         
         // Set current meeting and navigate
         setCurrentMeeting({ id: meetingId, title: meetingTitle });
-
+        setIsMeetingActive(false);
         router.push('/meeting-details');
       }
 

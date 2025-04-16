@@ -24,6 +24,8 @@ interface SidebarContextType {
   toggleCollapse: () => void;
   meetings: CurrentMeeting[];
   setMeetings: React.Dispatch<React.SetStateAction<CurrentMeeting[]>>;
+  setIsMeetingActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isMeetingActive: boolean;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -43,6 +45,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
+  const [isMeetingActive, setIsMeetingActive] = useState(false);
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -112,7 +115,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, [meetings]);
 
   return (
-    <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse, meetings, setMeetings }}>
+    <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse, meetings, setMeetings, isMeetingActive, setIsMeetingActive }}>
       {children}
     </SidebarContext.Provider>
   );
