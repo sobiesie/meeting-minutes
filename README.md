@@ -280,7 +280,8 @@ cd backend
 # ------------------------------------------------------------------
 
 # --- Frontend ------------------------------------------------------
-cd ../frontend
+# Open CMD
+cd frontend
 clean_run_windows.bat          # clears old artefacts and builds the app
 pnpm run tauri dev             # launches the Meetily app
 # ------------------------------------------------------------------
