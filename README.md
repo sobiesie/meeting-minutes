@@ -113,8 +113,9 @@ The backend supports multiple LLM providers through a unified interface. Current
 - **Groq** (Llama3.2 90 B)
 - **Ollama** (Local models that supports function calling)
 
-### Configuration
-Create `.env` file with your API keys:
+### Configuration  
+Create a **`.env`** file with your API keys **inside the `backend/` directory**:
+
 ```env
 # Required for Anthropic
 ANTHROPIC_API_KEY=your_key_here  
@@ -166,39 +167,42 @@ GROQ_API_KEY=your_key_here
 
 ## Prerequisites
 
-- Node.js 18+
-- Python 3.10+
+- Node.js 18+
+- Python 3.10+
 - FFmpeg
-- Rust 1.65+ (for experimental features)
-- Cmake 3.22+ (for building the frontend)
-- For Windows: Visual Studio Build Tools with C++ development workload
+- Rust 1.65+ (for experimental features)
+- CMake 3.22+ (for building the frontend)
+- **Windows only:** Visual Studio Build Tools with the *C++ development* workload
+
+---
 
 ## Setup Instructions
 
-### 1. Frontend Setup
+### 1&nbsp;· Frontend Setup
 
-#### Run packaged version
+#### Run the packaged version
 
-Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
+Go to the **releases** page and download the latest version.
 
-**For Windows:**
-- Download either the `.exe` installer or `.msi` package
-- Once the installer is downloaded, double-click the executable file to run it
-- Windows will ask if you want to run untrusted apps, click "More info" and choose "Run anyway"
-- Follow the installation wizard to complete the setup
-- The application will be installed and available on your desktop
+**For Windows**
 
-**For macOS:**
-- Download the `dmg_darwin_arch64.zip` file
-- Extract the file
-- Double-click the `.dmg` file inside the extracted folder
-- Drag the application to your Applications folder
-- Execute the following command in terminal to remove the quarantine attribute:
-  ```
-  xattr -c /Applications/meeting-minutes-frontend.app
-  ```
+1. Download either the `.exe` installer or `.msi` package.  
+2. Once the installer is downloaded, double‑click the executable file to run it.  
+3. Windows will ask if you want to run untrusted apps—click **“More info”** and choose **“Run anyway.”**  
+4. Follow the installation wizard to complete the setup.  
+5. The application will be installed and available on your desktop.
 
-Provide necessary permissions for audio capture and microphone access.
+**For macOS**
+
+1. Download the `dmg_darwin_arch64.zip` file.  
+2. Extract the file.  
+3. Double‑click the `.dmg` file inside the extracted folder.  
+4. Drag the application to your **Applications** folder.  
+5. Execute the following command in Terminal to remove the quarantine attribute:
+   ```bash
+   xattr -c /Applications/meeting-minutes-frontend.app
+   ```
+6. Provide the necessary permissions for audio capture and microphone access.
 
 #### Dev run
 
@@ -209,11 +213,13 @@ cd frontend
 # Give execute permissions to clean_build.sh
 chmod +x clean_build.sh
 
-# run clean_build.sh
+# Run clean_build.sh
 ./clean_build.sh
 ```
 
-### 2. Backend Setup
+---
+
+### 2&nbsp;· Backend Setup
 
 ```bash
 # Clone the repository
@@ -239,7 +245,7 @@ echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
 # On Windows (PowerShell):
 "ANTHROPIC_API_KEY=your_api_key`nGROQ_API_KEY=your_api_key" | Out-File -FilePath .env -Encoding utf8
 
-# Configure environment variables for Groq
+# Configure GROQ environment variable if you prefer
 # On macOS/Linux:
 export GROQ_API_KEY=your_groq_api_key
 
@@ -250,17 +256,37 @@ $env:GROQ_API_KEY="your_groq_api_key"
 # On macOS/Linux:
 chmod +x build_whisper.sh
 ./build_whisper.sh
-
-# On Windows:
-.\build_whisper.bat
-
-# Start backend servers
-# On macOS/Linux:
-./clean_start_backend.sh
-
-# On Windows:
-.\start_with_output.ps1
 ```
+
+> **Windows users:** Skip the Linux build script above and proceed to the next section.
+
+---
+
+### 3&nbsp;· Full build on Windows 10 / 11 (dev workflow)
+
+```powershell
+# 0. Open PowerShell (Run as Administrator the first time you install pnpm)
+
+npm install -g pnpm            # install pnpm globally (once)
+
+# --- Backend -------------------------------------------------------
+cd backend
+./run_clean_start_backend.ps1  # prompts for the Whisper model,
+                               # compiles whisper.cpp if needed,
+                               # this opens two terminals:
+                               #   • Whisper worker
+                               #   • FastAPI server
+# keep those two terminals open
+# ------------------------------------------------------------------
+
+# --- Frontend ------------------------------------------------------
+cd ../frontend
+clean_run_windows.bat          # clears old artefacts and builds the app
+pnpm run tauri dev             # launches the Meetily app
+# ------------------------------------------------------------------
+```
+
+> **Note:** The two terminals started by `run_clean_start_backend.ps1` must stay open while the frontend is running.
 
 ## Development Guidelines
 
