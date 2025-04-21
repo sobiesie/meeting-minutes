@@ -1,13 +1,13 @@
 <div align="center" style="border-bottom: none">
     <h1>
-        <img src="docs/6.png" width="400" style="border-radius: 10px;" />
+        <img src="docs/Meetily-6.png" style="border-radius: 10px;" />
         <br>
-        Meetily - AI-Powered Meeting Assistant
+        Your AI-Powered Meeting Assistant
     </h1>
     <a href="https://trendshift.io/repositories/13272" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13272" alt="Zackriya-Solutions%2Fmeeting-minutes | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
     <br>
     <br>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Pre_Release-v0.0.4-brightgreen" alt="Pre-Release"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/"><img src="https://img.shields.io/badge/Pre_Release-Link-brightgreen" alt="Pre-Release"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-4k+-red" alt="Stars"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-yellow" alt="Supported OS"></a>
@@ -36,7 +36,7 @@
 
 </div>
 
-## Overview
+# Overview
 
 An AI-powered meeting assistant that captures live meeting audio, transcribes it in real-time, and generates summaries while ensuring user privacy. Perfect for teams who want to focus on discussions while automatically capturing and organizing meeting content.
 
@@ -49,41 +49,82 @@ While there are many meeting transcription tools available, this solution stands
 - **Customizable**: Self-host and modify for your specific needs
 - **Intelligent**: Built-in knowledge graph for semantic search across meetings
 
-## Features
+# Features
 
 ✅ Modern, responsive UI with real-time updates
 
 ✅ Real-time audio capture (microphone + system audio)
 
-✅ Live transcription using Whisper.cpp
-
-🚧 Speaker diarization
+✅ Live transcription using locally-running Whisper
 
 ✅ Local processing for privacy
 
 ✅ Packaged the app for macOS and Windows
 
-🚧 Export to Markdown/PDF
+✅ Rich text editor for notes
+
+🚧 Export to Markdown/PDF/HTML
+
+🚧 Obsidian Integration 
+
+🚧 Speaker diarization
+
+---
 
 
-> **Note**: We have a Rust-based implementation that explores better performance and native integration. It currently implements:
-> - ✅ Real-time audio capture from both microphone and system audio
-> - ✅ Live transcription using locally-running Whisper
-> - ✅ Speaker diarization
-> - ✅ Rich text editor for notes
-> 
-We are currently working on:
-> - ✅ Export to Markdown/PDF
-> - ✅ Export to HTML
+# System Architecture
+
+<p align="center">
+    <img src="docs/HighLevel.jpg" width="900" alt="Meetily High Level Architecture" />
+</p>
+
+### Core Components
+
+1. **Audio Capture Service**
+   - Real-time microphone/system audio capture
+   - Audio preprocessing pipeline
+   - Built with Rust (experimental) and Python
+
+2. **Transcription Engine**
+   - Whisper.cpp for local transcription
+   - Supports multiple model sizes (tiny->large)
+   - GPU-accelerated processing
+
+3. **LLM Orchestrator**
+   - Unified interface for multiple providers
+   - Automatic fallback handling
+   - Chunk processing with overlap
+   - Model configuration:
+
+4. **Data Services**
+   - **ChromaDB**: Vector store for transcript embeddings
+   - **SQLite**: Process tracking and metadata storage
 
 
-## Setup Instructions
+### Deployment Architecture
 
-### 1. Frontend Setup
+- **Frontend**: Tauri app + Next.js (packaged executables)
+- **Backend**: Python FastAPI:
+  - Transcript workers
+  - LLM inference
+
+## Prerequisites
+
+- Node.js 18+
+- Python 3.10+
+- FFmpeg
+- Rust 1.65+ (for experimental features)
+- Cmake 3.22+ (for building the frontend)
+- For Windows: Visual Studio Build Tools with C++ development workload
+
+
+# Setup Instructions
+
+## 1. Frontend Setup
 
 Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
 
-## For macOS:
+### For macOS:
 
 **Option 1: Using Homebrew (Recommended)**
 ```bash
@@ -107,7 +148,7 @@ meetily-server --language en --model medium
 
 Provide necessary permissions for audio capture and microphone access.
 
-## For Windows:
+### For Windows:
 
 **Option 1: Using the Setup Executable (.exe) (Recommended)**
 1. Download the `meeting-minutes-frontend_0.1.0_x64-setup.exe` file
@@ -119,7 +160,9 @@ Provide necessary permissions for audio capture and microphone access.
 - Click `More info` and choose `Run anyway`, or
 - Right-click on the installer (.exe), select Properties, and check the Unblock checkbox at the bottom
 
-![windows_signing_issue](https://github.com/user-attachments/assets/f2a2655d-9881-42ed-88aa-357a1f5b6118)
+<p align="center">
+    <img src="https://github.com/user-attachments/assets/f2a2655d-9881-42ed-88aa-357a1f5b6118" width="300" alt="Windows Security Warning" />
+</p>
 
 **Option 2: Using the MSI Installer (.msi)**
 1. Download the `meeting-minutes-frontend_0.1.0_x64_en-US.msi` file
@@ -129,9 +172,9 @@ Provide necessary permissions for audio capture and microphone access.
 
 Provide necessary permissions for audio capture and microphone access.
 
-### 2. Backend Setup
+## 2. Backend Setup
 
-## For macOS:
+### For macOS:
 
 **Option 1: Using Homebrew (Recommended)**
 ```bash
@@ -191,7 +234,7 @@ cd meeting-minutes
 docker-compose up -d
 ```
 
-## For Windows:
+### For Windows:
 
 **Option 1: Manual Setup**
 1. Clone the repository:
@@ -288,27 +331,6 @@ When setting up the backend (either via Homebrew, manual installation, or Docker
 4. **Quantized models** (reduced size, slightly lower quality):
    - tiny-q5_1, base-q5_1, small-q5_1, medium-q5_0
 
-## Release 0.0.3
-
-A new release is available!
-
-Please check out the release [here](https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3).
-
-### What's New
-- **Windows Support**: Fixed audio capture issues on Windows
-- **Improved Error Handling**: Better error handling and logging for audio devices
-- **Enhanced Device Detection**: More robust audio device detection across platforms
-- **Windows Installers**: Added both .exe and .msi installers for Windows
-- Transcription quality is improved
-- Bug fixes and improvements for frontend
-- Better backend app build process
-- Improved documentation
-
-### What would be next?
-- Database connection to save meeting minutes
-- Improve summarization quality for smaller LLM models
-- Add download options for meeting transcriptions 
-- Add download option for summary
 
 ### Known issues
 - Smaller LLMs can hallucinate, making summarization quality poor; Please use model above 32B parameter size
@@ -336,54 +358,80 @@ GROQ_API_KEY=your_key_here
 
 ```
 
-## System Architecture
+## Troubleshooting
 
-![High Level Architecture](docs/HighLevel.jpg)
+### Backend Issues
 
-### Core Components
+#### Model Problems
 
-1. **Audio Capture Service**
-   - Real-time microphone/system audio capture
-   - Audio preprocessing pipeline
-   - Built with Rust (experimental) and Python
+If you encounter issues with the Whisper model:
 
-2. **Transcription Engine**
-   - Whisper.cpp for local transcription
-   - Supports multiple model sizes (tiny->large)
-   - GPU-accelerated processing
+```bash
+# Try a different model size
+meetily-download-model small
 
-3. **LLM Orchestrator**
-   - Unified interface for multiple providers
-   - Automatic fallback handling
-   - Chunk processing with overlap
-   - Model configuration:
+# Verify model installation
+ls -la $(brew --prefix)/opt/meetily-backend/backend/whisper-server-package/models/
+```
 
-4. **Data Services**
-   - **ChromaDB**: Vector store for transcript embeddings
-   - **SQLite**: Process tracking and metadata storage
+#### Server Connection Issues
 
-5. **API Layer**
-   - FastAPI endpoints:
-     - POST /upload
-     - POST /process
-     - GET /summary/{id}
-     - DELETE /summary/{id}
+If the server fails to start:
 
-### Deployment Architecture
+1. Check if ports 8178 and 5167 are available:
+   ```bash
+   lsof -i :8178
+   lsof -i :5167
+   ```
 
-- **Frontend**: Tauri app + Next.js (packaged executables)
-- **Backend**: Python FastAPI:
-  - Transcript workers
-  - LLM inference
+2. Verify that FFmpeg is installed correctly:
+   ```bash
+   which ffmpeg
+   ffmpeg -version
+   ```
 
-## Prerequisites
+3. Check the logs for specific error messages when running `meetily-server`
 
-- Node.js 18+
-- Python 3.10+
-- FFmpeg
-- Rust 1.65+ (for experimental features)
-- Cmake 3.22+ (for building the frontend)
-- For Windows: Visual Studio Build Tools with C++ development workload
+4. Try running the Whisper server manually:
+   ```bash
+   cd $(brew --prefix)/opt/meetily-backend/backend/whisper-server-package/
+   ./run-server.sh --model models/ggml-medium.bin
+   ```
+
+### Frontend Issues
+
+If the frontend application doesn't connect to the backend:
+
+1. Ensure the backend server is running (`meetily-server`)
+2. Check if the application can access localhost:5167
+3. Restart the application after starting the backend
+
+If the application fails to launch:
+
+```bash
+# Clear quarantine attributes
+xattr -cr /Applications/meeting-minutes-frontend.app
+```
+
+## Uninstallation
+
+To completely remove Meetily:
+
+```bash
+# Remove the frontend
+brew uninstall --cask meetily
+
+# Remove the backend
+brew uninstall meetily-backend
+
+# Optional: remove the taps
+brew untap zackriya-solutions/meetily
+brew untap zackriya-solutions/meetily-backend
+
+# Optional: remove Ollama if no longer needed
+brew uninstall ollama
+```
+
 
 ## Development Guidelines
 
