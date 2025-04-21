@@ -4,9 +4,11 @@
         <br>
         Meetily - AI-Powered Meeting Assistant
     </h1>
+    <a href="https://trendshift.io/repositories/13272" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13272" alt="Zackriya-Solutions%2Fmeeting-minutes | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+    <br>
     <br>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Pre_Release-v0.0.4-brightgreen" alt="Pre-Release"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-3k+-red" alt="Stars"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-4k+-red" alt="Stars"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-yellow" alt="Supported OS"></a>
     <br>
@@ -33,7 +35,6 @@
 </p>
 
 </div>
-
 
 ## Overview
 
@@ -75,6 +76,217 @@ We are currently working on:
 > - ✅ Export to Markdown/PDF
 > - ✅ Export to HTML
 
+
+## Setup Instructions
+
+### 1. Frontend Setup
+
+Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
+
+## For macOS:
+
+**Option 1: Using Homebrew (Recommended)**
+```bash
+# Install Meetily using Homebrew
+brew tap zackriya-solutions/meetily
+brew install --cask meetily
+
+# Start the backend server
+meetily-server --language en --model medium
+```
+
+**Option 2: Manual Installation**
+- Download the `dmg_darwin_arch64.zip` file
+- Extract the file
+- Double-click the `.dmg` file inside the extracted folder
+- Drag the application to your Applications folder
+- Execute the following command in terminal to remove the quarantine attribute:
+```
+  xattr -c /Applications/meeting-minutes-frontend.app
+```
+
+Provide necessary permissions for audio capture and microphone access.
+
+## For Windows:
+
+**Option 1: Using the Setup Executable (.exe) (Recommended)**
+1. Download the `meeting-minutes-frontend_0.1.0_x64-setup.exe` file
+2. Double-click the installer to run it
+3. Follow the on-screen instructions to complete the installation
+4. The application will be available on your desktop
+
+**Note:** Windows may display a security warning. To bypass this:
+- Click `More info` and choose `Run anyway`, or
+- Right-click on the installer (.exe), select Properties, and check the Unblock checkbox at the bottom
+
+![windows_signing_issue](https://github.com/user-attachments/assets/f2a2655d-9881-42ed-88aa-357a1f5b6118)
+
+**Option 2: Using the MSI Installer (.msi)**
+1. Download the `meeting-minutes-frontend_0.1.0_x64_en-US.msi` file
+2. Double-click the MSI file to run it
+3. Follow the installation wizard to complete the setup
+4. The application will be installed and available on your desktop
+
+Provide necessary permissions for audio capture and microphone access.
+
+### 2. Backend Setup
+
+## For macOS:
+
+**Option 1: Using Homebrew (Recommended)**
+```bash
+# Install the backend using Homebrew
+brew install meetily-backend
+
+# Download a Whisper model (choose size based on your needs)
+meetily-download-model medium
+
+# Start the backend server
+meetily-server
+```
+
+You can set up API keys during installation or manually:
+```bash
+echo "ANTHROPIC_API_KEY=your_key_here" > $(brew --prefix)/opt/meetily-backend/backend/.env
+echo "GROQ_API_KEY=your_key_here" >> $(brew --prefix)/opt/meetily-backend/backend/.env
+```
+
+**Option 2: Manual Setup**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes/backend
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Add environment file with API keys
+echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
+
+# Configure environment variables for Groq
+export GROQ_API_KEY=your_groq_api_key
+
+# Build dependencies
+chmod +x build_whisper.sh
+./build_whisper.sh
+
+# Start backend servers
+./clean_start_backend.sh
+```
+
+**Option 3: Docker Setup**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes
+
+# Run the Docker build script (interactive setup)
+./docker-build.sh
+
+# Or use docker-compose directly with environment variables
+docker-compose up -d
+```
+
+## For Windows:
+
+**Option 1: Manual Setup**
+1. Clone the repository:
+```bash
+git clone https://github.com/Zackriya-Solutions/meeting-minutes
+cd meeting-minutes/backend
+```
+
+2. Make sure you have installed all the prerequisites:
+   - ffmpeg (install using Chocolatey: `choco install ffmpeg`)
+   - cmake
+   - Visual Studio Build Tools with C++ development workload
+   - Python versions between 3.10 and 3.12 (ensure it's in your PATH)
+
+3. Create and activate a virtual environment:
+```bash
+python -m venv venv
+.\venv\Scripts\activate
+```
+
+4. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+5. Add environment file with API keys (PowerShell):
+```powershell
+"ANTHROPIC_API_KEY=your_api_key`nGROQ_API_KEY=your_api_key" | Out-File -FilePath .env -Encoding utf8
+```
+
+6. Configure environment variables for Groq:
+```powershell
+# PowerShell
+$env:GROQ_API_KEY="your_groq_api_key"
+
+# Command Prompt
+set GROQ_API_KEY=your_groq_api_key
+```
+
+7. Build dependencies:
+```bash
+.\build_whisper.bat
+```
+
+8. Start the backend servers:
+```bash
+.\start_with_output.ps1
+```
+
+**Option 2: Docker Setup (including ARM64/Snapdragon)**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes
+
+# Run the Docker build script (interactive setup)
+.\docker-build.bat
+```
+
+### Docker Configuration Options
+
+The Docker setup for both macOS and Windows allows you to configure:
+- Whisper model selection (tiny, base, small, medium, large-v3, etc.)
+- Language preference (auto-detection or specific language)
+- Logging level
+
+### Development Setup
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Give execute permissions to clean_build.sh
+chmod +x clean_build.sh
+
+# run clean_build.sh
+./clean_build.sh
+```
+
+### Whisper Model Selection
+
+When setting up the backend (either via Homebrew, manual installation, or Docker), you can choose from various Whisper models based on your needs:
+
+1. **Standard models** (balance of accuracy and speed):
+   - tiny, base, small, medium
+
+2. **English-optimized models** (faster for English content):
+   - tiny.en, base.en, small.en, medium.en
+
+3. **Advanced models** (for special needs):
+   - large-v3, large-v3-turbo
+   - small.en-tdrz (with speaker diarization)
+
+4. **Quantized models** (reduced size, slightly lower quality):
+   - tiny-q5_1, base-q5_1, small-q5_1, medium-q5_0
 
 ## Release 0.0.3
 
@@ -172,95 +384,6 @@ GROQ_API_KEY=your_key_here
 - Rust 1.65+ (for experimental features)
 - Cmake 3.22+ (for building the frontend)
 - For Windows: Visual Studio Build Tools with C++ development workload
-
-## Setup Instructions
-
-### 1. Frontend Setup
-
-#### Run packaged version
-
-Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
-
-**For Windows:**
-- Download either the `.exe` installer or `.msi` package
-- Once the installer is downloaded, double-click the executable file to run it
-- Windows will ask if you want to run untrusted apps, click "More info" and choose "Run anyway"
-- Follow the installation wizard to complete the setup
-- The application will be installed and available on your desktop
-
-**For macOS:**
-- Download the `dmg_darwin_arch64.zip` file
-- Extract the file
-- Double-click the `.dmg` file inside the extracted folder
-- Drag the application to your Applications folder
-- Execute the following command in terminal to remove the quarantine attribute:
-  ```
-  xattr -c /Applications/meeting-minutes-frontend.app
-  ```
-
-Provide necessary permissions for audio capture and microphone access.
-
-#### Dev run
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Give execute permissions to clean_build.sh
-chmod +x clean_build.sh
-
-# run clean_build.sh
-./clean_build.sh
-```
-
-### 2. Backend Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
-cd meeting-minutes/backend
-
-# Create and activate virtual environment
-# On macOS/Linux:
-python -m venv venv
-source venv/bin/activate
-
-# On Windows:
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Add environment file with API keys
-# On macOS/Linux:
-echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
-
-# On Windows (PowerShell):
-"ANTHROPIC_API_KEY=your_api_key`nGROQ_API_KEY=your_api_key" | Out-File -FilePath .env -Encoding utf8
-
-# Configure environment variables for Groq
-# On macOS/Linux:
-export GROQ_API_KEY=your_groq_api_key
-
-# On Windows (PowerShell):
-$env:GROQ_API_KEY="your_groq_api_key"
-
-# Build dependencies
-# On macOS/Linux:
-chmod +x build_whisper.sh
-./build_whisper.sh
-
-# On Windows:
-.\build_whisper.bat
-
-# Start backend servers
-# On macOS/Linux:
-./clean_start_backend.sh
-
-# On Windows:
-.\start_with_output.ps1
-```
 
 ## Development Guidelines
 
