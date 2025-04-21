@@ -1,12 +1,9 @@
 import aiosqlite
 import json
-from datetime import datetime, timedelta
-import uuid
-from typing import Optional, Dict, Any
+from datetime import datetime
+from typing import Optional, Dict
 import logging
-import asyncio
 from contextlib import asynccontextmanager
-import time
 import sqlite3
 
 logger = logging.getLogger(__name__)
@@ -148,38 +145,6 @@ class DatabaseManager:
             await conn.execute(query, params)
             await conn.commit()
 
-    async def get_process(self, process_id: str) -> Optional[Dict[str, Any]]:
-        """Get a process by its ID"""
-        async with self._get_connection() as conn:
-            async with conn.execute(
-                "SELECT meeting_id, status, created_at, updated_at, result, error, start_time, end_time, chunk_count, processing_time, metadata FROM summary_processes WHERE meeting_id = ?",
-                (process_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                
-                if not row:
-                    return None
-                    
-                result = {
-                    "meeting_id": row[0],
-                    "status": row[1],
-                    "created_at": row[2],
-                    "updated_at": row[3],
-                    "start_time": row[6],
-                    "end_time": row[7],
-                    "chunk_count": row[8],
-                    "processing_time": row[9]
-                }
-                
-                if row[4]:  # result
-                    result["result"] = json.loads(row[4])
-                if row[5]:  # error
-                    result["error"] = row[5]
-                if row[10]:  # metadata
-                    result["metadata"] = json.loads(row[10])
-                    
-                return result
-
     async def save_transcript(self, meeting_id: str, transcript_text: str, model: str, model_name: str, 
                             chunk_size: int, overlap: int):
         """Save transcript data"""
@@ -235,17 +200,6 @@ class DatabaseManager:
                     return dict(zip([col[0] for col in cursor.description], row))
                 return None
 
-    async def cleanup_old_processes(self, hours: int = 24):
-        """Clean up processes older than specified hours"""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
-        
-        async with self._get_connection() as conn:
-            await conn.execute(
-                "DELETE FROM summary_processes WHERE created_at < ?",
-                (cutoff,)
-            )
-            await conn.commit()
-
     async def save_meeting(self, meeting_id: str, title: str):
         """Save or update a meeting"""
         try:
@@ -263,12 +217,6 @@ class DatabaseManager:
                         VALUES (?, ?, datetime('now'), datetime('now'))
                     """, (meeting_id, title))
                 else:
-                    # # Update meeting title if needed
-                    # cursor.execute("""
-                    #     UPDATE meetings 
-                    #     SET title = ?, updated_at = datetime('now')
-                    #     WHERE id = ?
-                    # """, (title, meeting_id))
                     # If we get here and meeting exists, throw error since we don't want duplicates
                     raise Exception(f"Meeting with ID {meeting_id} already exists")
                 conn.commit()
@@ -346,22 +294,6 @@ class DatabaseManager:
             """, (new_title, now, meeting_id))
             await conn.commit()
 
-    async def get_meeting_transcripts(self, meeting_id: str):
-        """Get all transcripts for a meeting"""
-        async with self._get_connection() as conn:
-            cursor = await conn.execute("""
-                SELECT id, transcript, created_at
-                FROM transcripts
-                WHERE meeting_id = ?
-                ORDER BY created_at ASC
-            """, (meeting_id,))
-            rows = await cursor.fetchall()
-            return [{
-                'id': row[0],
-                'text': row[1],
-                'timestamp': row[2]
-            } for row in rows]
-
     async def get_all_meetings(self):
         """Get all meetings with basic information"""
         async with self._get_connection() as conn:
@@ -398,6 +330,3 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Error deleting meeting {meeting_id}: {str(e)}")
                 return False
-
-            
-    
