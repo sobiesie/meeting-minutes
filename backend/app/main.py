@@ -96,13 +96,6 @@ class SummaryProcessor:
     def __init__(self):
         try:
             self.db = DatabaseManager()
-            self._lock = Lock()  # Kept for potential future use
-
-            # Load API key and validate
-            api_key = os.getenv('ANTHROPIC_API_KEY')
-            if not api_key:
-                logger.error("ANTHROPIC_API_KEY environment variable not set")
-                raise ValueError("ANTHROPIC_API_KEY environment variable not set")
 
             logger.info("Initializing SummaryProcessor components")
             self.transcript_processor = TranscriptProcessor()
