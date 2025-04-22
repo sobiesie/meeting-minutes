@@ -5,7 +5,6 @@ from pydantic import BaseModel
 import uvicorn
 from typing import Optional, List
 import logging
-import os
 from dotenv import load_dotenv
 from db import DatabaseManager
 import json
