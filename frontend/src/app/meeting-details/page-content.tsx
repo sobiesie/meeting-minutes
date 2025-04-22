@@ -93,6 +93,24 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     loadModels();
   }, []);
 
+  useEffect(() => {
+    const fetchModelConfig = async () => {
+      try {
+        const response = await fetch('http://localhost:5167/get-model-config');
+        const data = await response.json();
+        setModelConfig(data);
+      } catch (error) {
+        console.error('Failed to fetch model config:', error);
+      }
+    };
+
+    fetchModelConfig();
+  }, []);
+  
+  useEffect(() => {
+    console.log('Model config:', modelConfig);
+  }, [modelConfig]);
+
   const formatSize = (size: number): string => {
     if (size < 1024) {
       return `${size} B`;
