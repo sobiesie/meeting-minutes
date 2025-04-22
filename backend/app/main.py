@@ -82,6 +82,11 @@ class SaveTranscriptRequest(BaseModel):
     meeting_title: str
     transcripts: List[Transcript]
 
+class SaveModelConfigRequest(BaseModel):
+    provider: str
+    model: str
+    whisperModel: str
+
 class TranscriptRequest(BaseModel):
     """Request model for transcript text, updated with meeting_id"""
     text: str
@@ -420,6 +425,21 @@ async def save_transcript(request: SaveTranscriptRequest):
     except Exception as e:
         logger.error(f"Error saving transcript: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get-model-config")
+async def get_model_config():
+    """Get the current model configuration"""
+    model_config = await db.get_model_config()
+    return model_config
+
+@app.post("/save-model-config")
+async def save_model_config(request: SaveModelConfigRequest):
+    """Save the model configuration"""
+    await db.save_model_config(request.provider, request.model, request.whisperModel)
+    return {"status": "success", "message": "Model configuration saved successfully"}   
+
+
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

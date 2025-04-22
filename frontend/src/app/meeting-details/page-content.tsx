@@ -433,9 +433,43 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   };
 
 
+  const handleSaveModelConfig = async () => {
+    try {
+      const payload = {
+        provider: modelConfig.provider,
+        model: modelConfig.model,
+        whisperModel: modelConfig.whisperModel
+      };
+      console.log('Saving model config with payload:', payload);
+      
+      const response = await fetch('http://localhost:5167/save-model-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Save model config failed:', errorData);
+        console.error('Response status:', response.status);
+        throw new Error(errorData.error || 'Failed to save model config');
+      }
 
-  
+      const responseData = await response.json();
+      console.log('Save model config success:', responseData);
+
+      setModelConfig(payload);
+    } catch (error) {
+      console.error('Failed to save model config:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Failed to save model config: Unknown error');
+      } 
+    }
+  };
 
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
 
@@ -692,7 +726,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
               <div className="mt-6 flex justify-end">
                 <button
-                  onClick={() => setShowModelSettings(false)}
+                  onClick={() => {
+                    setShowModelSettings(false);
+                    handleSaveModelConfig();
+                  }}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Done
