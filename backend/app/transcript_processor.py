@@ -104,8 +104,7 @@ class TranscriptProcessor:
             agent = Agent(
                 llm,
                 result_type=SummaryResponse,
-                result_retries=5, # Keep retries as it helps with occasional API flakiness
-                enable_debug=True # Enable debug for more detailed logs from pydantic-ai if needed
+                result_retries=5,
             )
             logger.info("Pydantic-AI Agent initialized.")
 
