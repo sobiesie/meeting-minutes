@@ -4,6 +4,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.models.groq import GroqModel
+from pydantic_ai.models.openai import OpenAIModel
 import logging
 import os
 from dotenv import load_dotenv
@@ -54,7 +55,7 @@ class TranscriptProcessor:
 
         Args:
             text: The transcript text.
-            model: The AI model provider ('claude', 'ollama', 'groq').
+            model: The AI model provider ('claude', 'ollama', 'groq', 'openai').
             model_name: The specific model name.
             chunk_size: The size of each text chunk.
             overlap: The overlap between consecutive chunks.
@@ -65,31 +66,48 @@ class TranscriptProcessor:
             - A list of JSON strings, where each string is the summary of a chunk.
         """
 
-        logger.info(f"Processing transcript (length {len(text)}) with model={model}/{model_name}, chunk_size={chunk_size}, overlap={overlap}")
+        logger.info(f"Processing transcript (length {len(text)}) with model provider={model}, model_name={model_name}, chunk_size={chunk_size}, overlap={overlap}")
 
         all_json_data = []
         agent = None # Define agent variable
+        llm = None # Define llm variable
 
         try:
             # Select and initialize the AI model and agent
             if model == "claude":
                 api_key = os.getenv("ANTHROPIC_API_KEY")
-                if not api_key: raise ValueError("ANTHROPIC_API_KEY not set")
+                if not api_key: raise ValueError("ANTHROPIC_API_KEY environment variable not set")
                 llm = AnthropicModel(model_name, api_key=api_key)
+                logger.info(f"Using Claude model: {model_name}")
             elif model == "ollama":
-                llm = OllamaModel(model_name) # Assumes Ollama server is running locally
+                # Assumes Ollama server is running locally at default address
+                # You might need host/port configuration if it's elsewhere
+                llm = OllamaModel(model_name)
+                logger.info(f"Using Ollama model: {model_name}")
             elif model == "groq":
                 api_key = os.getenv("GROQ_API_KEY")
-                if not api_key: raise ValueError("GROQ_API_KEY not set")
+                if not api_key: raise ValueError("GROQ_API_KEY environment variable not set")
                 llm = GroqModel(model_name, api_key=api_key)
+                logger.info(f"Using Groq model: {model_name}")
+            # --- ADD OPENAI SUPPORT HERE ---
+            elif model == "openai":
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key: raise ValueError("OPENAI_API_KEY environment variable not set")
+                llm = OpenAIModel(model_name, api_key=api_key)
+                logger.info(f"Using OpenAI model: {model_name}")
+            # --- END OPENAI SUPPORT ---
             else:
+                logger.error(f"Unsupported model provider requested: {model}")
                 raise ValueError(f"Unsupported model provider: {model}")
 
+            # Initialize the agent with the selected LLM
             agent = Agent(
                 llm,
                 result_type=SummaryResponse,
-                result_retries=5,
+                result_retries=5, # Keep retries as it helps with occasional API flakiness
+                enable_debug=True # Enable debug for more detailed logs from pydantic-ai if needed
             )
+            logger.info("Pydantic-AI Agent initialized.")
 
             # Split transcript into chunks
             step = chunk_size - overlap
