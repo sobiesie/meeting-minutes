@@ -85,6 +85,7 @@ class SaveModelConfigRequest(BaseModel):
     provider: str
     model: str
     whisperModel: str
+    apiKey: Optional[str] = None
 
 class TranscriptRequest(BaseModel):
     """Request model for transcript text, updated with meeting_id"""
@@ -422,12 +423,17 @@ async def save_transcript(request: SaveTranscriptRequest):
 async def get_model_config():
     """Get the current model configuration"""
     model_config = await db.get_model_config()
+    api_key = await db.get_api_key(model_config["provider"])
+    if api_key != None:
+        model_config["apiKey"] = api_key
     return model_config
 
 @app.post("/save-model-config")
 async def save_model_config(request: SaveModelConfigRequest):
     """Save the model configuration"""
     await db.save_model_config(request.provider, request.model, request.whisperModel)
+    if request.apiKey != None:
+        await db.save_api_key(request.apiKey, request.provider)
     return {"status": "success", "message": "Model configuration saved successfully"}   
 
 

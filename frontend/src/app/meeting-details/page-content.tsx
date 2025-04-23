@@ -5,21 +5,9 @@ import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
 import { AISummary } from '@/components/AISummary';
 import { CurrentMeeting, useSidebar } from '@/components/Sidebar/SidebarProvider';
-
-interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude';
-  model: string;
-  whisperModel: string;
-}
+import { ModelSettingsModal, ModelConfig } from '@/components/ModelSettingsModal';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-
-interface OllamaModel {
-  name: string;
-  id: string;
-  size: string;
-  modified: string;
-}
 
 export default function PageContent({ meeting, summaryData }: { meeting: any, summaryData: Summary }) {
   const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
@@ -36,69 +24,19 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     model: 'llama3.2:latest',
     whisperModel: 'large-v3'
   });
-  const [originalTranscript, setOriginalTranscript] = useState<string>('');
-  const [models, setModels] = useState<OllamaModel[]>([]);
-  const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
+  const [originalTranscript, setOriginalTranscript] = useState<string>('');
+  const [error, setError] = useState<string>('');
   const { setCurrentMeeting, setMeetings } = useSidebar();
-  const modelOptions = {
-    ollama: models.map(model => model.name),
-    claude: ['claude-3-5-sonnet-latest'],
-    groq: ['llama-3.3-70b-versatile'],
-  };
-
-  useEffect(() => {
-    if (models.length > 0 && modelConfig.provider === 'ollama') {
-      setModelConfig(prev => ({
-        ...prev,
-        model: models[0].name
-      }));
-    }
-  }, [models]);
-
-  
-
-  // useEffect(() => {
-  //   setCurrentMeeting({ id: meeting.id, title: meetingTitle });
-  // }, [meetingTitle, setCurrentMeeting, meeting.id]);
-
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        const response = await fetch('http://localhost:11434/api/tags', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const modelList = data.models.map((model: any) => ({
-          name: model.name,
-          id: model.model,
-          size: formatSize(model.size),
-          modified: model.modified_at
-        }));
-        setModels(modelList);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load Ollama models');
-        console.error('Error loading models:', err);
-      }
-    };
-
-    loadModels();
-  }, []);
 
   useEffect(() => {
     const fetchModelConfig = async () => {
       try {
         const response = await fetch('http://localhost:5167/get-model-config');
         const data = await response.json();
-        setModelConfig(data);
+        if (data.provider !== null) {
+          setModelConfig(data);
+        }
       } catch (error) {
         console.error('Failed to fetch model config:', error);
       }
@@ -106,22 +44,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
     fetchModelConfig();
   }, []);
-  
+
   useEffect(() => {
     console.log('Model config:', modelConfig);
   }, [modelConfig]);
-
-  const formatSize = (size: number): string => {
-    if (size < 1024) {
-      return `${size} B`;
-    } else if (size < 1024 * 1024) {
-      return `${(size / 1024).toFixed(1)} KB`;
-    } else if (size < 1024 * 1024 * 1024) {
-      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-    } else {
-      return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-    }
-  };
 
   const generateAISummary = useCallback(async () => {
     setSummaryStatus('processing');
@@ -132,8 +58,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       if (!fullTranscript.trim()) {
         throw new Error('No transcript text available. Please add some text first.');
       }
-      
-      setOriginalTranscript(fullTranscript);
       
       console.log('Generating summary for transcript length:', fullTranscript.length);
       
@@ -450,13 +374,14 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     }
   };
 
-
-  const handleSaveModelConfig = async () => {
+  const handleSaveModelConfig = async (updatedConfig?: ModelConfig) => {
     try {
+      const configToSave = updatedConfig || modelConfig;
       const payload = {
-        provider: modelConfig.provider,
-        model: modelConfig.model,
-        whisperModel: modelConfig.whisperModel
+        provider: configToSave.provider,
+        model: configToSave.model,
+        whisperModel: configToSave.whisperModel,
+        apiKey: configToSave.apiKey ?? null
       };
       console.log('Saving model config with payload:', payload);
       
@@ -665,96 +590,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
         {/* Model Settings Modal */}
         {showModelSettings && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Model Settings</h3>
-                <button
-                  onClick={() => setShowModelSettings(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Summarization Model
-                  </label>
-                  <div className="flex space-x-2">
-                    <select
-                      className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      value={modelConfig.provider}
-                      onChange={(e) => {
-                        const provider = e.target.value as ModelConfig['provider'];
-                        setModelConfig({
-                          ...modelConfig,
-                          provider,
-                          model: modelOptions[provider][0]
-                        });
-                      }}
-                    >
-                      <option value="claude">Claude</option>
-                      <option value="groq">Groq</option>
-                      <option value="ollama">Ollama</option>
-                    </select>
-
-                    <select
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      value={modelConfig.model}
-                      onChange={(e) => setModelConfig(prev => ({ ...prev, model: e.target.value }))}
-                    >
-                      {modelOptions[modelConfig.provider].map(model => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {modelConfig.provider === 'ollama' && (
-                  <div>
-                    <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
-                    {error && (
-                      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                        {error}
-                      </div>
-                    )}
-                    <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
-                      {models.map((model) => (
-                        <div 
-                          key={model.id}
-                          className={`bg-white p-4 rounded-lg shadow cursor-pointer transition-colors ${
-                            modelConfig.model === model.name ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
-                          }`}
-                          onClick={() => setModelConfig(prev => ({ ...prev, model: model.name }))}
-                        >
-                          <h3 className="font-bold">{model.name}</h3>
-                          <p className="text-gray-600">Size: {model.size}</p>
-                          <p className="text-gray-600">Modified: {model.modified}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => {
-                    setShowModelSettings(false);
-                    handleSaveModelConfig();
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
+          <ModelSettingsModal
+            showModelSettings={showModelSettings}
+            setShowModelSettings={setShowModelSettings}
+            modelConfig={modelConfig}
+            setModelConfig={setModelConfig}
+            onSave={handleSaveModelConfig}
+          />
         )}
       </div>
     </div>
