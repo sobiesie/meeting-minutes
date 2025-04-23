@@ -434,7 +434,15 @@ async def save_model_config(request: SaveModelConfigRequest):
     await db.save_model_config(request.provider, request.model, request.whisperModel)
     if request.apiKey != None:
         await db.save_api_key(request.apiKey, request.provider)
-    return {"status": "success", "message": "Model configuration saved successfully"}   
+    return {"status": "success", "message": "Model configuration saved successfully"}  
+
+class GetApiKeyRequest(BaseModel):
+    provider: str
+
+@app.post("/get-api-key")
+async def get_api_key(request: GetApiKeyRequest):
+    """Get the API key for a given provider"""
+    return await db.get_api_key(request.provider)
 
 
 
