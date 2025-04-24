@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
@@ -35,6 +35,25 @@ export function ModelSettingsModal({
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
 
+  useEffect(() => {
+    if (showModelSettings) {
+      const fetchModelConfig = async () => {
+        try {
+          const response = await fetch('http://localhost:5167/get-model-config');
+          const data = await response.json();
+          if (data.provider !== null) {
+            setModelConfig(data);
+            setApiKey(data.apiKey || '');
+          }
+        } catch (error) {
+          console.error('Failed to fetch model config:', error);
+        }
+      };
+
+      fetchModelConfig();
+    }
+  }, [showModelSettings]);
+
   const fetchApiKey = async (provider: string) => {
     try {
       const response = await fetch('http://localhost:5167/get-api-key', {
@@ -59,11 +78,31 @@ export function ModelSettingsModal({
 
   const modelOptions = {
     ollama: models.map(model => model.name),
-    claude: ['claude-3-5-sonnet-latest'],
+    // claude: ['claude-3-5-sonnet-latest'],
+    claude: ['claude-3-7-sonnet-20250219','claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620'],
     groq: ['llama-3.3-70b-versatile'],
+    openai: [
+      'gpt-4o-2024-11-20',
+      'gpt-4o-2024-08-06',
+      'gpt-4o-mini-2024-07-18',
+      'gpt-4.1-2025-04-14',
+      'gpt-4.1-nano-2025-04-14',
+      'gpt-4.1-mini-2025-04-14',
+      'o4-mini-2025-04-16',
+      'o3-2025-04-16',
+      'o3-mini-2025-01-31',
+      'o1-2024-12-17',
+      'o1-mini-2024-09-12',
+      'gpt-4-turbo-2024-04-09',
+      'gpt-4-0125-Preview',
+      'gpt-4-vision-preview',
+      'gpt-4-1106-Preview',
+      'gpt-3.5-turbo-0125',
+      'gpt-3.5-turbo-1106'
+    ]
   };
 
-  const requiresApiKey = modelConfig.provider === 'claude' || modelConfig.provider === 'groq';
+  const requiresApiKey = modelConfig.provider === 'claude' || modelConfig.provider === 'groq' || modelConfig.provider === 'openai';
   const isDoneDisabled = requiresApiKey && !apiKey.trim();
 
   useEffect(() => {
@@ -156,6 +195,7 @@ export function ModelSettingsModal({
                 <option value="claude">Claude</option>
                 <option value="groq">Groq</option>
                 <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI</option>
               </select>
 
               <select
