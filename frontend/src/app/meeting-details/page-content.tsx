@@ -58,6 +58,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       if (!fullTranscript.trim()) {
         throw new Error('No transcript text available. Please add some text first.');
       }
+
+      setOriginalTranscript(fullTranscript);
       
       console.log('Generating summary for transcript length:', fullTranscript.length);
       
