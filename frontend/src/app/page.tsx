@@ -334,6 +334,7 @@ export default function Home() {
 
       // Save to SQLite
       if (isCallApi) {
+        console.log('Saving transcript to database...', transcripts);
         const response = await fetch('http://localhost:5167/save-transcript', {
           method: 'POST',
           headers: {

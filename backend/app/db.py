@@ -278,7 +278,6 @@ class DatabaseManager:
                     SELECT transcript, timestamp
                     FROM transcripts
                     WHERE meeting_id = ?
-                    ORDER BY timestamp
                 """, (meeting_id,))
                 transcripts = await cursor.fetchall()
                 

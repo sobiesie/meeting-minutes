@@ -49,6 +49,7 @@ export default function MeetingDetails() {
           throw new Error('Failed to fetch meeting details');
         }
         const data = await response.json();
+        console.log('Meeting details:', data);
         setMeetingDetails(data);
       } catch (error) {
         console.error('Error fetching meeting details:', error);
