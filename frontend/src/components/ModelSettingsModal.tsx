@@ -34,6 +34,7 @@ export function ModelSettingsModal({
   const [apiKey, setApiKey] = useState<string>(modelConfig.apiKey || '');
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
+  const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
 
   useEffect(() => {
     if (showModelSettings) {
@@ -79,9 +80,13 @@ export function ModelSettingsModal({
   const modelOptions = {
     ollama: models.map(model => model.name),
     // claude: ['claude-3-5-sonnet-latest'],
-    claude: ['claude-3-7-sonnet-20250219','claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620'],
+    claude: ['claude-3-5-sonnet-latest','claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620'],
     groq: ['llama-3.3-70b-versatile'],
     openai: [
+      'gpt-4o',
+      'gpt-4.1',
+      'gpt-4-turbo',
+      'gpt-3.5-turbo',
       'gpt-4o-2024-11-20',
       'gpt-4o-2024-08-06',
       'gpt-4o-mini-2024-07-18',
@@ -156,6 +161,13 @@ export function ModelSettingsModal({
     onSave(updatedConfig);
   };
 
+  const handleInputClick = () => {
+    if (isApiKeyLocked) {
+      setIsLockButtonVibrating(true);
+      setTimeout(() => setIsLockButtonVibrating(false), 500);
+    }
+  };
+
   if (!showModelSettings) return null;
 
   return (
@@ -228,11 +240,21 @@ export function ModelSettingsModal({
                   }`}
                   placeholder="Enter your API key"
                 />
+                {isApiKeyLocked && (
+                  <div 
+                    onClick={handleInputClick}
+                    className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50 rounded-md cursor-not-allowed"
+                  />
+                    
+                  
+                )}
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center space-x-2">
                   <button
                     type="button"
                     onClick={() => setIsApiKeyLocked(!isApiKeyLocked)}
-                    className="text-gray-500 hover:text-gray-700"
+                    className={`text-gray-500 hover:text-gray-700 transition-colors duration-200 ${
+                      isLockButtonVibrating ? 'animate-vibrate text-red-500' : ''
+                    }`}
                     title={isApiKeyLocked ? "Unlock to edit" : "Lock to prevent editing"}
                   >
                     {isApiKeyLocked ? (
