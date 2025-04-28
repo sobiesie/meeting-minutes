@@ -114,6 +114,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           }
 
           if (result.status === 'completed' && result.data) {
+            // Defensive: check if all sections are empty
+            const summarySections = Object.entries(result.data).filter(([key]) => key !== 'MeetingName');
+            const allEmpty = summarySections.every(([, section]) => !(section as any).blocks || (section as any).blocks.length === 0);
+            if (allEmpty) {
+              setSummaryError('Summary generation failed. Please check your model/API key settings.');
+              setSummaryStatus('error');
+              clearInterval(pollInterval);
+              return;
+            }
             clearInterval(pollInterval);
 
             // Remove MeetingName from data before formatting
