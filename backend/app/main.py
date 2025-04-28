@@ -249,8 +249,13 @@ async def process_transcript_background(process_id: str, transcript: TranscriptR
             await processor.db.update_meeting_name(transcript.meeting_id, final_summary["MeetingName"])
 
         # Save final result
-        await processor.db.update_process(process_id, status="completed", result=json.dumps(final_summary))
-        logger.info(f"Background processing completed for process_id: {process_id}")
+        if all_json_data:
+            await processor.db.update_process(process_id, status="completed", result=json.dumps(final_summary))
+            logger.info(f"Background processing completed for process_id: {process_id}")
+        else:
+            error_msg = "Summary generation failed: No summary could be generated. Please check your model/API key settings."
+            await processor.db.update_process(process_id, status="failed", error=error_msg)
+            logger.error(f"Background processing failed for process_id: {process_id} - {error_msg}")
 
     except Exception as e:
         error_msg = str(e)
