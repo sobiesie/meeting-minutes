@@ -8,9 +8,13 @@
     <br>
     <br>
     <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/"><img src="https://img.shields.io/badge/Pre_Release-Link-brightgreen" alt="Pre-Release"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-4k+-red" alt="Stars"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-yellow" alt="Supported OS"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/zackriya-solutions/meeting-minutes?style=flat">
+</a>
+ <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"> <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/zackriya-solutions/meeting-minutes/total?style=plastic"> </a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-white" alt="Supported OS"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img alt="GitHub Tag" src="https://img.shields.io/github/v/tag/zackriya-solutions/meeting-minutes?include_prereleases&color=yellow">
+</a>
     <br>
     <h3>
     <br>
@@ -455,7 +459,16 @@ MIT License - Feel free to use this project for your own purposes.
 
 We are planning to add a subscription option so that you don't have to run the backend on your own server. This will help you scale better and run the service 24/7. This is based on a few requests we received. If you are interested, please fill out the form [here](http://zackriya.com/aimeeting/).
 
-Last updated: March 3, 2025
+## Contributions
+
+Thanks for all the contributions. Our community is what makes this project possible. Below is the list of contributors:
+
+<a href="https://github.com/zackriya-solutions/meeting-minutes/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=zackriya-solutions/meeting-minutes" />
+</a>
+
+
+We welcome contributions from the community! If you have any questions or suggestions, please open an issue or submit a pull request. Please follow the established project structure and guidelines. For more details, refer to the [Contributing](contributing.md) file.
 
 ## Acknowledgments
 
