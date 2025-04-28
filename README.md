@@ -1,5 +1,3 @@
-cleanup/backend-unused+save-meetings-db-ui-change
-
 <div align="center" style="border-bottom: none">
     <h1>
         <img src="docs/Meetily-6.png" style="border-radius: 10px;" />
