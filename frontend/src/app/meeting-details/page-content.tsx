@@ -586,7 +586,11 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                   onRegenerateSummary={() => {
                     handleRegenerateSummary();
                   }}
-                  meeting={meeting}
+                  meeting={{
+                    id: meeting.id,
+                    title: meetingTitle,
+                    created_at: meeting.created_at
+                  }}
                 />
               </div>
               {summaryStatus !== 'idle' && (

@@ -468,7 +468,7 @@ Thanks for all the contributions. Our community is what makes this project possi
 </a>
 
 
-We welcome contributions from the community! If you have any questions or suggestions, please open an issue or submit a pull request. Please follow the established project structure and guidelines. For more details, refer to the [Contributing](contributing.md) file.
+We welcome contributions from the community! If you have any questions or suggestions, please open an issue or submit a pull request. Please follow the established project structure and guidelines. For more details, refer to the [CONTRIBUTING](CONTRIBUTING.md) file.
 
 ## Acknowledgments
 
