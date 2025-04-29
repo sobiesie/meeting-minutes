@@ -1,14 +1,20 @@
 <div align="center" style="border-bottom: none">
     <h1>
-        <img src="docs/6.png" width="400" style="border-radius: 10px;" />
+        <img src="docs/Meetily-6.png" style="border-radius: 10px;" />
         <br>
-        Meetily - AI-Powered Meeting Assistant
+        Your AI-Powered Meeting Assistant
     </h1>
+    <a href="https://trendshift.io/repositories/13272" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13272" alt="Zackriya-Solutions%2Fmeeting-minutes | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
     <br>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Pre_Release-v0.0.4-brightgreen" alt="Pre-Release"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Stars-3k+-red" alt="Stars"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
-    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-yellow" alt="Supported OS"></a>
+    <br>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/"><img src="https://img.shields.io/badge/Pre_Release-Link-brightgreen" alt="Pre-Release"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/zackriya-solutions/meeting-minutes?style=flat">
+</a>
+ <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"> <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/zackriya-solutions/meeting-minutes/total?style=plastic"> </a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img src="https://img.shields.io/badge/Supported_OS-macOS,_Windows-white" alt="Supported OS"></a>
+    <a href="https://github.com/Zackriya-Solutions/meeting-minutes/releases/tags"><img alt="GitHub Tag" src="https://img.shields.io/github/v/tag/zackriya-solutions/meeting-minutes?include_prereleases&color=yellow">
+</a>
     <br>
     <h3>
     <br>
@@ -34,8 +40,7 @@
 
 </div>
 
-
-## Overview
+# Overview
 
 An AI-powered meeting assistant that captures live meeting audio, transcribes it in real-time, and generates summaries while ensuring user privacy. Perfect for teams who want to focus on discussions while automatically capturing and organizing meeting content.
 
@@ -48,86 +53,34 @@ While there are many meeting transcription tools available, this solution stands
 - **Customizable**: Self-host and modify for your specific needs
 - **Intelligent**: Built-in knowledge graph for semantic search across meetings
 
-## Features
+# Features
 
 ✅ Modern, responsive UI with real-time updates
 
 ✅ Real-time audio capture (microphone + system audio)
 
-✅ Live transcription using Whisper.cpp
-
-🚧 Speaker diarization
+✅ Live transcription using locally-running Whisper
 
 ✅ Local processing for privacy
 
 ✅ Packaged the app for macOS and Windows
 
-🚧 Export to Markdown/PDF
+✅ Rich text editor for notes
+
+🚧 Export to Markdown/PDF/HTML
+
+🚧 Obsidian Integration 
+
+🚧 Speaker diarization
+
+---
 
 
-> **Note**: We have a Rust-based implementation that explores better performance and native integration. It currently implements:
-> - ✅ Real-time audio capture from both microphone and system audio
-> - ✅ Live transcription using locally-running Whisper
-> - ✅ Speaker diarization
-> - ✅ Rich text editor for notes
-> 
-We are currently working on:
-> - ✅ Export to Markdown/PDF
-> - ✅ Export to HTML
+# System Architecture
 
-
-## Release 0.0.3
-
-A new release is available!
-
-Please check out the release [here](https://github.com/Zackriya-Solutions/meeting-minutes/releases/tag/v0.0.3).
-
-### What's New
-- **Windows Support**: Fixed audio capture issues on Windows
-- **Improved Error Handling**: Better error handling and logging for audio devices
-- **Enhanced Device Detection**: More robust audio device detection across platforms
-- **Windows Installers**: Added both .exe and .msi installers for Windows
-- Transcription quality is improved
-- Bug fixes and improvements for frontend
-- Better backend app build process
-- Improved documentation
-
-### What would be next?
-- Database connection to save meeting minutes
-- Improve summarization quality for smaller LLM models
-- Add download options for meeting transcriptions 
-- Add download option for summary
-
-### Known issues
-- Smaller LLMs can hallucinate, making summarization quality poor; Please use model above 32B parameter size
-- Backend build process requires CMake, C++ compiler, etc. Making it harder to build
-- Backend build process requires Python 3.10 or newer
-- Frontend build process requires Node.js
-
-## LLM Integration
-
-The backend supports multiple LLM providers through a unified interface. Current implementations include:
-
-### Supported Providers
-- **Anthropic** (Claude models)
-- **Groq** (Llama3.2 90 B)
-- **Ollama** (Local models that supports function calling)
-
-### Configuration  
-Create a **`.env`** file with your API keys **inside the `backend/` directory**:
-
-```env
-# Required for Anthropic
-ANTHROPIC_API_KEY=your_key_here  
-
-# Required for Groq 
-GROQ_API_KEY=your_key_here
-
-```
-
-## System Architecture
-
-![High Level Architecture](docs/HighLevel.jpg)
+<p align="center">
+    <img src="docs/HighLevel.jpg" width="900" alt="Meetily High Level Architecture" />
+</p>
 
 ### Core Components
 
@@ -151,12 +104,6 @@ GROQ_API_KEY=your_key_here
    - **ChromaDB**: Vector store for transcript embeddings
    - **SQLite**: Process tracking and metadata storage
 
-5. **API Layer**
-   - FastAPI endpoints:
-     - POST /upload
-     - POST /process
-     - GET /summary/{id}
-     - DELETE /summary/{id}
 
 ### Deployment Architecture
 
@@ -167,44 +114,168 @@ GROQ_API_KEY=your_key_here
 
 ## Prerequisites
 
-- Node.js 18+
-- Python 3.10+
+- Node.js 18+
+- Python 3.10+
 - FFmpeg
-- Rust 1.65+ (for experimental features)
-- CMake 3.22+ (for building the frontend)
-- **Windows only:** Visual Studio Build Tools with the *C++ development* workload
+- Rust 1.65+ (for experimental features)
+- Cmake 3.22+ (for building the frontend)
+- For Windows: Visual Studio Build Tools with C++ development workload
 
----
 
-## Setup Instructions
+# Setup Instructions
 
-### 1&nbsp;· Frontend Setup
+## Windows OS
 
-#### Run the packaged version
+### 1. Frontend Setup
 
-Go to the **releases** page and download the latest version.
+**Option 1: Using the Setup Executable (.exe) (Recommended)**
+1. Download the `meetily-frontend_0.0.4_x64-setup.exe` file
+2. Double-click the installer to run it
+3. Follow the on-screen instructions to complete the installation
+4. The application will be available on your desktop
 
-**For Windows**
+**Note:** Windows may display a security warning. To bypass this:
+- Click `More info` and choose `Run anyway`, or
+- Right-click on the installer (.exe), select Properties, and check the Unblock checkbox at the bottom
 
-1. Download either the `.exe` installer or `.msi` package.  
-2. Once the installer is downloaded, double‑click the executable file to run it.  
-3. Windows will ask if you want to run untrusted apps—click **“More info”** and choose **“Run anyway.”**  
-4. Follow the installation wizard to complete the setup.  
-5. The application will be installed and available on your desktop.
+<p align="center">
+    <img src="https://github.com/user-attachments/assets/f2a2655d-9881-42ed-88aa-357a1f5b6118" width="300" alt="Windows Security Warning" />
+</p>
 
-**For macOS**
+**Option 2: Using the MSI Installer (.msi)**
+1. Download the `meetily-frontend_0.0.4_x64_en-US.msi` file
+2. Double-click the MSI file to run it
+3. Follow the installation wizard to complete the setup
+4. The application will be installed and available on your desktop
 
-1. Download the `dmg_darwin_arch64.zip` file.  
-2. Extract the file.  
-3. Double‑click the `.dmg` file inside the extracted folder.  
-4. Drag the application to your **Applications** folder.  
-5. Execute the following command in Terminal to remove the quarantine attribute:
-   ```bash
-   xattr -c /Applications/meeting-minutes-frontend.app
-   ```
-6. Provide the necessary permissions for audio capture and microphone access.
+Provide necessary permissions for audio capture and microphone access.
 
-#### Dev run
+### 2. Backend Setup
+
+
+<p align="center">
+<a href="https://www.youtube.com/watch?v=Tu_8wXgoaDE">
+    <img src="https://img.youtube.com/vi/Tu_8wXgoaDE/0.jpg"  alt="Windows Security Warning" />
+</a>
+</p>
+
+
+**Option 1: Manual Setup**
+1. Clone the repository:
+```bash
+git clone https://github.com/Zackriya-Solutions/meeting-minutes
+cd meeting-minutes/backend
+```
+
+2. Build dependencies:
+```bash
+.\build_whisper.bat
+```
+
+3. Start the backend servers:
+```bash
+.\start_with_output.ps1
+```
+
+**Option 2: Docker Setup (including ARM64/Snapdragon)**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes
+
+# Run the Docker build script (interactive setup)
+.\docker-build.bat
+```
+
+### Docker Configuration Options
+
+The Docker setup for both macOS and Windows allows you to configure:
+- Whisper model selection (tiny, base, small, medium, large-v3, etc.)
+- Language preference (auto-detection or specific language)
+- Logging level
+
+## For macOS:
+
+### 1. Frontend Setup
+
+Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
+
+
+**Option 1: Using Homebrew (Recommended)**
+
+> **Note** : This step installs the backend server and the frontend app.
+> Once the backend and the frontend are started, you can open the application from the Applications folder.
+
+```bash
+# Install Meetily using Homebrew
+brew tap zackriya-solutions/meetily
+brew install --cask meetily
+
+# Start the backend server
+meetily-server --language en --model medium
+```
+
+**Option 2: Manual Installation**
+- Download the `dmg_darwin_arch64.zip` file
+- Extract the file
+- Double-click the `.dmg` file inside the extracted folder
+- Drag the application to your Applications folder
+- Execute the following command in terminal to remove the quarantine attribute:
+```
+  xattr -c /Applications/meetily-frontend.app
+```
+
+Provide necessary permissions for audio capture and microphone access.
+
+### 2. Backend Setup
+
+**Option 1: Using Homebrew (Recommended)**
+```bash
+# Install the backend using Homebrew
+brew install meetily-backend
+
+# Download a Whisper model (choose size based on your needs)
+meetily-download-model medium
+
+# Start the backend server
+meetily-server
+```
+
+You can set up API keys during installation or manually:
+```bash
+echo "ANTHROPIC_API_KEY=your_key_here" > $(brew --prefix)/opt/meetily-backend/backend/.env
+echo "GROQ_API_KEY=your_key_here" >> $(brew --prefix)/opt/meetily-backend/backend/.env
+```
+
+**Option 2: Manual Setup**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes/backend
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Add environment file with API keys
+echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
+
+# Configure environment variables for Groq
+export GROQ_API_KEY=your_groq_api_key
+
+# Build dependencies
+chmod +x build_whisper.sh
+./build_whisper.sh
+
+# Start backend servers
+./clean_start_backend.sh
+```
+
+
+### Development Setup
 
 ```bash
 # Navigate to frontend directory
@@ -213,81 +284,128 @@ cd frontend
 # Give execute permissions to clean_build.sh
 chmod +x clean_build.sh
 
-# Run clean_build.sh
+# run clean_build.sh
 ./clean_build.sh
 ```
 
----
+### Whisper Model Selection
 
-### 2&nbsp;· Backend Setup
+When setting up the backend (either via Homebrew, manual installation, or Docker), you can choose from various Whisper models based on your needs:
+
+1. **Standard models** (balance of accuracy and speed):
+   - tiny, base, small, medium
+
+2. **English-optimized models** (faster for English content):
+   - tiny.en, base.en, small.en, medium.en
+
+3. **Advanced models** (for special needs):
+   - large-v3, large-v3-turbo
+   - small.en-tdrz (with speaker diarization)
+
+4. **Quantized models** (reduced size, slightly lower quality):
+   - tiny-q5_1, base-q5_1, small-q5_1, medium-q5_0
+
+
+### Known issues
+- Smaller LLMs can hallucinate, making summarization quality poor; Please use model above 32B parameter size
+- Backend build process requires CMake, C++ compiler, etc. Making it harder to build
+- Backend build process requires Python 3.10 or newer
+- Frontend build process requires Node.js
+
+## LLM Integration
+
+The backend supports multiple LLM providers through a unified interface. Current implementations include:
+
+### Supported Providers
+- **Anthropic** (Claude models)
+- **Groq** (Llama3.2 90 B)
+- **Ollama** (Local models that supports function calling)
+
+### Configuration
+Create `.env` file with your API keys:
+```env
+# Required for Anthropic
+ANTHROPIC_API_KEY=your_key_here  
+
+# Required for Groq 
+GROQ_API_KEY=your_key_here
+
+```
+
+## Troubleshooting
+
+### Backend Issues
+
+#### Model Problems
+
+If you encounter issues with the Whisper model:
 
 ```bash
-# Clone the repository
-git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
-cd meeting-minutes/backend
+# Try a different model size
+meetily-download-model small
 
-# Create and activate virtual environment
-# On macOS/Linux:
-python -m venv venv
-source venv/bin/activate
-
-# On Windows:
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Add environment file with API keys
-# On macOS/Linux:
-echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
-
-# On Windows (PowerShell):
-"ANTHROPIC_API_KEY=your_api_key`nGROQ_API_KEY=your_api_key" | Out-File -FilePath .env -Encoding utf8
-
-# Configure GROQ environment variable if you prefer
-# On macOS/Linux:
-export GROQ_API_KEY=your_groq_api_key
-
-# On Windows (PowerShell):
-$env:GROQ_API_KEY="your_groq_api_key"
-
-# Build dependencies
-# On macOS/Linux:
-chmod +x build_whisper.sh
-./build_whisper.sh
+# Verify model installation
+ls -la $(brew --prefix)/opt/meetily-backend/backend/whisper-server-package/models/
 ```
 
-> **Windows users:** Skip the Linux build script above and proceed to the next section.
+#### Server Connection Issues
 
----
+If the server fails to start:
 
-### 3&nbsp;· Full build on Windows 10 / 11 (dev workflow)
+1. Check if ports 8178 and 5167 are available:
+   ```bash
+   lsof -i :8178
+   lsof -i :5167
+   ```
 
-```powershell
-# 0. Open PowerShell (Run as Administrator the first time you install pnpm)
+2. Verify that FFmpeg is installed correctly:
+   ```bash
+   which ffmpeg
+   ffmpeg -version
+   ```
 
-npm install -g pnpm            # install pnpm globally (once)
+3. Check the logs for specific error messages when running `meetily-server`
 
-# --- Backend -------------------------------------------------------
-cd backend
-./run_clean_start_backend.ps1  # prompts for the Whisper model,
-                               # compiles whisper.cpp if needed,
-                               # this opens two terminals:
-                               #   • Whisper worker
-                               #   • FastAPI server
-# keep those two terminals open
-# ------------------------------------------------------------------
+4. Try running the Whisper server manually:
+   ```bash
+   cd $(brew --prefix)/opt/meetily-backend/backend/whisper-server-package/
+   ./run-server.sh --model models/ggml-medium.bin
+   ```
 
-# --- Frontend ------------------------------------------------------
-# Open CMD
-cd frontend
-clean_run_windows.bat          # clears old artefacts and builds the app
-pnpm run tauri dev             # launches the Meetily app
-# ------------------------------------------------------------------
+### Frontend Issues
+
+If the frontend application doesn't connect to the backend:
+
+1. Ensure the backend server is running (`meetily-server`)
+2. Check if the application can access localhost:5167
+3. Restart the application after starting the backend
+
+If the application fails to launch:
+
+```bash
+# Clear quarantine attributes
+xattr -cr /Applications/meetily-frontend.app
 ```
 
-> **Note:** The two terminals started by `run_clean_start_backend.ps1` must stay open while the frontend is running.
+## Uninstallation
+
+To completely remove Meetily:
+
+```bash
+# Remove the frontend
+brew uninstall --cask meetily
+
+# Remove the backend
+brew uninstall meetily-backend
+
+# Optional: remove the taps
+brew untap zackriya-solutions/meetily
+brew untap zackriya-solutions/meetily-backend
+
+# Optional: remove Ollama if no longer needed
+brew uninstall ollama
+```
+
 
 ## Development Guidelines
 
@@ -311,7 +429,16 @@ MIT License - Feel free to use this project for your own purposes.
 
 We are planning to add a subscription option so that you don't have to run the backend on your own server. This will help you scale better and run the service 24/7. This is based on a few requests we received. If you are interested, please fill out the form [here](http://zackriya.com/aimeeting/).
 
-Last updated: March 3, 2025
+## Contributions
+
+Thanks for all the contributions. Our community is what makes this project possible. Below is the list of contributors:
+
+<a href="https://github.com/zackriya-solutions/meeting-minutes/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=zackriya-solutions/meeting-minutes" />
+</a>
+
+
+We welcome contributions from the community! If you have any questions or suggestions, please open an issue or submit a pull request. Please follow the established project structure and guidelines. For more details, refer to the [CONTRIBUTING](CONTRIBUTING.md) file.
 
 ## Acknowledgments
 

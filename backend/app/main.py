@@ -81,6 +81,12 @@ class SaveTranscriptRequest(BaseModel):
     meeting_title: str
     transcripts: List[Transcript]
 
+class SaveModelConfigRequest(BaseModel):
+    provider: str
+    model: str
+    whisperModel: str
+    apiKey: Optional[str] = None
+
 class TranscriptRequest(BaseModel):
     """Request model for transcript text, updated with meeting_id"""
     text: str
@@ -243,8 +249,13 @@ async def process_transcript_background(process_id: str, transcript: TranscriptR
             await processor.db.update_meeting_name(transcript.meeting_id, final_summary["MeetingName"])
 
         # Save final result
-        await processor.db.update_process(process_id, status="completed", result=json.dumps(final_summary))
-        logger.info(f"Background processing completed for process_id: {process_id}")
+        if all_json_data:
+            await processor.db.update_process(process_id, status="completed", result=json.dumps(final_summary))
+            logger.info(f"Background processing completed for process_id: {process_id}")
+        else:
+            error_msg = "Summary generation failed: No summary could be generated. Please check your model/API key settings."
+            await processor.db.update_process(process_id, status="failed", error=error_msg)
+            logger.error(f"Background processing failed for process_id: {process_id} - {error_msg}")
 
     except Exception as e:
         error_msg = str(e)
@@ -412,6 +423,34 @@ async def save_transcript(request: SaveTranscriptRequest):
     except Exception as e:
         logger.error(f"Error saving transcript: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get-model-config")
+async def get_model_config():
+    """Get the current model configuration"""
+    model_config = await db.get_model_config()
+    api_key = await db.get_api_key(model_config["provider"])
+    if api_key != None:
+        model_config["apiKey"] = api_key
+    return model_config
+
+@app.post("/save-model-config")
+async def save_model_config(request: SaveModelConfigRequest):
+    """Save the model configuration"""
+    await db.save_model_config(request.provider, request.model, request.whisperModel)
+    if request.apiKey != None:
+        await db.save_api_key(request.apiKey, request.provider)
+    return {"status": "success", "message": "Model configuration saved successfully"}  
+
+class GetApiKeyRequest(BaseModel):
+    provider: str
+
+@app.post("/get-api-key")
+async def get_api_key(request: GetApiKeyRequest):
+    """Get the API key for a given provider"""
+    return await db.get_api_key(request.provider)
+
+
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

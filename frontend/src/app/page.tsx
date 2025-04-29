@@ -121,6 +121,33 @@ export default function Home() {
   }, [meetingTitle, setCurrentMeeting]);
 
   useEffect(() => {
+    const checkRecordingState = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const isCurrentlyRecording = await invoke('is_recording');
+        
+        if (isCurrentlyRecording && !isRecording) {
+          console.log('Recording is active in backend but not in UI, synchronizing state...');
+          setIsRecording(true);
+          setIsMeetingActive(true);
+        } else if (!isCurrentlyRecording && isRecording) {
+          console.log('Recording is inactive in backend but active in UI, synchronizing state...');
+          setIsRecording(false);
+        }
+      } catch (error) {
+        console.error('Failed to check recording state:', error);
+      }
+    };
+
+    checkRecordingState();
+    
+    // Set up a polling interval to periodically check recording state
+    const interval = setInterval(checkRecordingState, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [isRecording, setIsMeetingActive]);
+
+  useEffect(() => {
     if (isRecording) {
       const interval = setInterval(() => {
         setBarHeights(prev => {
@@ -232,11 +259,11 @@ export default function Home() {
       const randomTitle = `Meeting ${Math.random().toString(36).substring(2, 8)}`;
       setMeetingTitle(randomTitle);
       
-      // First check if we're already recording
+      // Only check if we're already recording, but don't try to stop it first
       const isCurrentlyRecording = await invoke('is_recording');
       if (isCurrentlyRecording) {
-        console.log('Already recording, stopping first...');
-        await handleRecordingStop2(false);
+        console.log('Already recording, cannot start a new recording');
+        return; // Just return without starting a new recording
       }
 
       // Start new recording with whisper model
@@ -334,6 +361,7 @@ export default function Home() {
 
       // Save to SQLite
       if (isCallApi) {
+        console.log('Saving transcript to database...', transcripts);
         const response = await fetch('http://localhost:5167/save-transcript', {
           method: 'POST',
           headers: {
@@ -636,6 +664,7 @@ export default function Home() {
       const pollInterval = setInterval(async () => {
         try {
           const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
             console.error('Get summary failed:', errorData);

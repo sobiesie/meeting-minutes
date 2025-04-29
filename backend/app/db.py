@@ -73,7 +73,21 @@ class DatabaseManager:
                     FOREIGN KEY (meeting_id) REFERENCES meetings(id)
                 )
             """)
-            
+
+            # Create settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    whisperModel TEXT NOT NULL,
+                    groqApiKey TEXT,
+                    openaiApiKey TEXT,
+                    anthropicApiKey TEXT,
+                    ollamaApiKey TEXT
+                )
+            """)
+
             conn.commit()
 
     @asynccontextmanager
@@ -264,7 +278,6 @@ class DatabaseManager:
                     SELECT transcript, timestamp
                     FROM transcripts
                     WHERE meeting_id = ?
-                    ORDER BY timestamp
                 """, (meeting_id,))
                 transcripts = await cursor.fetchall()
                 
@@ -330,3 +343,87 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Error deleting meeting {meeting_id}: {str(e)}")
                 return False
+
+    async def get_model_config(self):
+        """Get the current model configuration"""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("SELECT provider, model, whisperModel FROM settings")
+            row = await cursor.fetchone()
+            return dict(zip([col[0] for col in cursor.description], row)) if row else None
+
+    async def save_model_config(self, provider: str, model: str, whisperModel: str):
+        """Save the model configuration"""
+        async with self._get_connection() as conn:
+            # Check if the configuration already exists
+            cursor = await conn.execute("SELECT id FROM settings")
+            existing_config = await cursor.fetchone()
+            if existing_config:
+                # Update existing configuration
+                await conn.execute("""
+                    UPDATE settings 
+                    SET provider = ?, model = ?, whisperModel = ?
+                    WHERE id = '1'    
+                """, (provider, model, whisperModel))
+            else:
+                # Insert new configuration
+                await conn.execute("""
+                    INSERT INTO settings (id, provider, model, whisperModel)
+                    VALUES (?, ?, ?, ?)
+                """, ('1', provider, model, whisperModel))
+            await conn.commit()
+
+
+    async def save_api_key(self, api_key: str, provider: str):
+        """Save the API key"""
+        provider_list = ["openai", "claude", "groq", "ollama"]
+        if provider not in provider_list:
+            raise ValueError(f"Invalid provider: {provider}")
+        if provider == "openai":
+            api_key_name = "openaiApiKey"
+        elif provider == "claude":
+            api_key_name = "anthropicApiKey"
+        elif provider == "groq":
+            api_key_name = "groqApiKey"
+        elif provider == "ollama":
+            api_key_name = "ollamaApiKey"
+        async with self._get_connection() as conn:
+            await conn.execute(f"UPDATE settings SET {api_key_name} = ? WHERE id = '1'", (api_key,))
+            await conn.commit()
+
+    async def get_api_key(self, provider: str):
+        """Get the API key"""
+        provider_list = ["openai", "claude", "groq", "ollama"]
+        if provider not in provider_list:
+            raise ValueError(f"Invalid provider: {provider}")
+        if provider == "openai":
+            api_key_name = "openaiApiKey"
+        elif provider == "claude":
+            api_key_name = "anthropicApiKey"
+        elif provider == "groq":
+            api_key_name = "groqApiKey"
+        elif provider == "ollama":
+            api_key_name = "ollamaApiKey"
+        async with self._get_connection() as conn:
+            cursor = await conn.execute(f"SELECT {api_key_name} FROM settings WHERE id = '1'")
+            row = await cursor.fetchone()
+            return row[0] if row else None
+        
+    async def delete_api_key(self, provider: str):
+        """Delete the API key"""
+        provider_list = ["openai", "claude", "groq", "ollama"]
+        if provider not in provider_list:
+            raise ValueError(f"Invalid provider: {provider}")
+        if provider == "openai":
+            api_key_name = "openaiApiKey"
+        elif provider == "claude":
+            api_key_name = "anthropicApiKey"
+        elif provider == "groq":
+            api_key_name = "groqApiKey"
+        elif provider == "ollama":
+            api_key_name = "ollamaApiKey"
+        async with self._get_connection() as conn:
+            await conn.execute(f"UPDATE settings SET {api_key_name} = NULL WHERE id = '1'")
+            await conn.commit()
+            
+   
+
