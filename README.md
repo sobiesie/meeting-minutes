@@ -169,7 +169,7 @@ cd meeting-minutes/backend
 
 2. Build dependencies:
 ```bash
-.\build_whisper.bat
+.\build_whisper.cmd
 ```
 
 3. Start the backend servers:
