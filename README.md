@@ -124,38 +124,9 @@ While there are many meeting transcription tools available, this solution stands
 
 # Setup Instructions
 
-## 1. Frontend Setup
+## Windows OS
 
-Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
-
-### For macOS:
-
-**Option 1: Using Homebrew (Recommended)**
-```bash
-# Install Meetily using Homebrew
-brew tap zackriya-solutions/meetily
-brew install --cask meetily
-
-# Start the backend server
-meetily-server --language en --model medium
-```
-
-> **Note** : This step installs the backend server and the frontend app.
-> Once the backend and the frontend are started, you can open the application from the Applications folder.
-
-**Option 2: Manual Installation**
-- Download the `dmg_darwin_arch64.zip` file
-- Extract the file
-- Double-click the `.dmg` file inside the extracted folder
-- Drag the application to your Applications folder
-- Execute the following command in terminal to remove the quarantine attribute:
-```
-  xattr -c /Applications/meetily-frontend.app
-```
-
-Provide necessary permissions for audio capture and microphone access.
-
-### For Windows:
+### 1. Frontend Setup
 
 **Option 1: Using the Setup Executable (.exe) (Recommended)**
 1. Download the `meetily-frontend_0.0.4_x64-setup.exe` file
@@ -179,9 +150,84 @@ Provide necessary permissions for audio capture and microphone access.
 
 Provide necessary permissions for audio capture and microphone access.
 
-## 2. Backend Setup
+### 2. Backend Setup
 
-### For macOS:
+
+<p align="center">
+<a href="https://www.youtube.com/watch?v=Tu_8wXgoaDE">
+    <img src="https://img.youtube.com/vi/Tu_8wXgoaDE/0.jpg"  alt="Windows Security Warning" />
+</a>
+</p>
+
+
+**Option 1: Manual Setup**
+1. Clone the repository:
+```bash
+git clone https://github.com/Zackriya-Solutions/meeting-minutes
+cd meeting-minutes/backend
+```
+
+2. Build dependencies:
+```bash
+.\build_whisper.bat
+```
+
+3. Start the backend servers:
+```bash
+.\start_with_output.ps1
+```
+
+**Option 2: Docker Setup (including ARM64/Snapdragon)**
+```bash
+# Clone the repository
+git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
+cd meeting-minutes
+
+# Run the Docker build script (interactive setup)
+.\docker-build.bat
+```
+
+### Docker Configuration Options
+
+The Docker setup for both macOS and Windows allows you to configure:
+- Whisper model selection (tiny, base, small, medium, large-v3, etc.)
+- Language preference (auto-detection or specific language)
+- Logging level
+
+## For macOS:
+
+### 1. Frontend Setup
+
+Go to the [releases page](https://github.com/Zackriya-Solutions/meeting-minutes/releases) and download the latest version.
+
+
+**Option 1: Using Homebrew (Recommended)**
+
+> **Note** : This step installs the backend server and the frontend app.
+> Once the backend and the frontend are started, you can open the application from the Applications folder.
+
+```bash
+# Install Meetily using Homebrew
+brew tap zackriya-solutions/meetily
+brew install --cask meetily
+
+# Start the backend server
+meetily-server --language en --model medium
+```
+
+**Option 2: Manual Installation**
+- Download the `dmg_darwin_arch64.zip` file
+- Extract the file
+- Double-click the `.dmg` file inside the extracted folder
+- Drag the application to your Applications folder
+- Execute the following command in terminal to remove the quarantine attribute:
+```
+  xattr -c /Applications/meetily-frontend.app
+```
+
+Provide necessary permissions for audio capture and microphone access.
+
+### 2. Backend Setup
 
 **Option 1: Using Homebrew (Recommended)**
 ```bash
@@ -228,82 +274,6 @@ chmod +x build_whisper.sh
 ./clean_start_backend.sh
 ```
 
-
-### For Windows:
-
-
-<p align="center">
-<a href="https://www.youtube.com/watch?v=Tu_8wXgoaDE">
-    <img src="https://img.youtube.com/vi/Tu_8wXgoaDE/0.jpg"  alt="Windows Security Warning" />
-</a>
-</p>
-
-
-
-**Option 1: Manual Setup**
-1. Clone the repository:
-```bash
-git clone https://github.com/Zackriya-Solutions/meeting-minutes
-cd meeting-minutes/backend
-```
-
-2. Make sure you have installed all the prerequisites:
-   - ffmpeg (install using Chocolatey: `choco install ffmpeg`)
-   - cmake
-   - Visual Studio Build Tools with C++ development workload
-   - Python versions between 3.10 and 3.12 (ensure it's in your PATH)
-
-3. Create and activate a virtual environment:
-```bash
-python -m venv venv
-.\venv\Scripts\activate
-```
-
-4. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-5. Add environment file with API keys (PowerShell):
-```powershell
-"ANTHROPIC_API_KEY=your_api_key`nGROQ_API_KEY=your_api_key" | Out-File -FilePath .env -Encoding utf8
-```
-
-6. Configure environment variables for Groq:
-```powershell
-# PowerShell
-$env:GROQ_API_KEY="your_groq_api_key"
-
-# Command Prompt
-set GROQ_API_KEY=your_groq_api_key
-```
-
-7. Build dependencies:
-```bash
-.\build_whisper.bat
-```
-
-8. Start the backend servers:
-```bash
-.\start_with_output.ps1
-```
-
-**Option 2: Docker Setup (including ARM64/Snapdragon)**
-```bash
-# Clone the repository
-git clone https://github.com/Zackriya-Solutions/meeting-minutes.git
-cd meeting-minutes
-
-# Run the Docker build script (interactive setup)
-.\docker-build.bat
-```
-
-### Docker Configuration Options
-
-The Docker setup for both macOS and Windows allows you to configure:
-- Whisper model selection (tiny, base, small, medium, large-v3, etc.)
-- Language preference (auto-detection or specific language)
-- Logging level
 
 ### Development Setup
 
