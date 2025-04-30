@@ -38,8 +38,6 @@ pnpm run build
 
 # Set environment variables for the build
 echo "Setting up build environment..."
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-export CMAKE_ARGS="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 
 echo "Building Tauri app..."
 pnpm run tauri dev

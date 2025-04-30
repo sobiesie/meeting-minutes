@@ -309,13 +309,13 @@ export default function Home() {
         .map(t => `[${t.timestamp}] ${t.text}`)
         .join('\n\n');
 
-      const documentContent = `Meeting Title: ${meetingTitle}\nDate: ${new Date().toLocaleString()}\n\nTranscript:\n${formattedTranscript}`;
+      // const documentContent = `Meeting Title: ${meetingTitle}\nDate: ${new Date().toLocaleString()}\n\nTranscript:\n${formattedTranscript}`;
 
-      await invoke('save_transcript', { 
-        filePath: transcriptPath,
-        content: documentContent
-      });
-      console.log('Transcript saved to:', transcriptPath);
+      // await invoke('save_transcript', { 
+      //   filePath: transcriptPath,
+      //   content: documentContent
+      // });
+      // console.log('Transcript saved to:', transcriptPath);
 
       setIsRecording(false);
       
