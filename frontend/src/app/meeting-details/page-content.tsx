@@ -323,13 +323,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   }, [originalTranscript, modelConfig, meeting.id]);
 
   const handleCopyTranscript = useCallback(() => {
-    const header = `# Transcript of the Meeting: ${meeting.id} - ${meeting.title}\n\n`;
+    const header = `# Transcript of the Meeting: ${meeting.id} - ${meetingTitle??meeting.title}\n\n`;
     const date = `## Date: ${new Date(meeting.created_at).toLocaleDateString()}\n\n`;
     const fullTranscript = transcripts
       .map(t => `${t.timestamp}: ${t.text}`)
       .join('\n');
     navigator.clipboard.writeText(header + date + fullTranscript);
-  }, [transcripts, meeting]);
+  }, [transcripts, meeting, meetingTitle]);
 
   const handleGenerateSummary = useCallback(async () => {
     if (!transcripts.length) {
