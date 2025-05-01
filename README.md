@@ -262,7 +262,6 @@ Provide necessary permissions for audio capture and microphone access.
 ### 2. Backend Setup
 
 **Option 1: Using Homebrew (Recommended)**
-
 ```bash
 
 (Optional)
@@ -276,8 +275,6 @@ brew uninstall meetily-backend
 brew untap zackriya-solutions/meetily
 
 ```
-
-
 
 ```bash
 
@@ -296,7 +293,6 @@ brew install --cask meetily
 meetily-server --language en --model medium
 
 ```
-
 
 **Option 2: Manual Setup**
 ```bash
