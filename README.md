@@ -307,11 +307,6 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Add environment file with API keys
-echo -e "ANTHROPIC_API_KEY=your_api_key\nGROQ_API_KEY=your_api_key" | tee .env
-
-# Configure environment variables for Groq
-export GROQ_API_KEY=your_groq_api_key
 
 # Build dependencies
 chmod +x build_whisper.sh
@@ -368,16 +363,7 @@ The backend supports multiple LLM providers through a unified interface. Current
 - **Groq** (Llama3.2 90 B)
 - **Ollama** (Local models that supports function calling)
 
-### Configuration
-Create `.env` file with your API keys:
-```env
-# Required for Anthropic
-ANTHROPIC_API_KEY=your_key_here  
 
-# Required for Groq 
-GROQ_API_KEY=your_key_here
-
-```
 
 ## Troubleshooting
 
