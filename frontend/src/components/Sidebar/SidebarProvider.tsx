@@ -84,15 +84,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
       ]
     },
-    {
-      id: 'notes',
-      title: 'Notes',
-      type: 'folder' as const,
-      children: [
-        { id: 'project-ideas', title: 'Project Ideas', type: 'file' as const },
-        { id: 'action-items', title: 'Action Items', type: 'file' as const },
-      ]
-    }
+    // {
+    //   id: 'notes',
+    //   title: 'Notes',
+    //   type: 'folder' as const,
+    //   children: [
+    //     { id: 'project-ideas', title: 'Project Ideas', type: 'file' as const },
+    //     { id: 'action-items', title: 'Action Items', type: 'file' as const },
+    //   ]
+    // }
   ];
 
  

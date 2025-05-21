@@ -5,6 +5,7 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Play, Pause, Square, Mic } from 'lucide-react';
 import { ProcessRequest, SummaryResponse } from '@/types/summary';
+import { LoadingAnimation } from './LoadingAnimation';
 
 interface RecordingControlsProps {
   isRecording: boolean;
@@ -12,11 +13,13 @@ interface RecordingControlsProps {
   onRecordingStop: () => void;
   onRecordingStart: () => void;
   onTranscriptReceived: (summary: SummaryResponse) => void;
+  setIsRecording: (value: boolean) => void;
 }
 
 export const RecordingControls: React.FC<RecordingControlsProps> = ({
   isRecording,
   barHeights,
+  setIsRecording,
   onRecordingStop,
   onRecordingStart,
   onTranscriptReceived,
@@ -66,6 +69,10 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
     try {
       await invoke('start_recording');
       console.log('Recording started successfully');
+      const isCurrentlyRecording = await invoke('is_recording');
+      if (isCurrentlyRecording) {
+        setIsRecording(true);
+      }
       setIsProcessing(false);
       onRecordingStart();
     } catch (error) {
@@ -225,6 +232,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
               </>
             ) : (
               <>
+              <div className="relative">
                 <button
                   onClick={isRecording ? 
                     (isStopping ? cancelStopRecording : handleStopRecording) : 
@@ -247,6 +255,10 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                     <Mic size={20} />
                   )}
                 </button>
+                <LoadingAnimation
+                  isInitializing={isStarting}
+                />
+                </div>
 
                 <div className="flex items-center space-x-1 mx-4">
                   {barHeights.map((height, index) => (
@@ -259,6 +271,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                     />
                   ))}
                 </div>
+                
               </>
             )}
           </>

@@ -141,10 +141,10 @@ export default function Home() {
 
     checkRecordingState();
     
-    // Set up a polling interval to periodically check recording state
-    const interval = setInterval(checkRecordingState, 5000); // Check every 5 seconds
+    // // Set up a polling interval to periodically check recording state
+    // const interval = setInterval(checkRecordingState, 5000); // Check every 5 seconds
     
-    return () => clearInterval(interval);
+    // return () => clearInterval(interval);
   }, [isRecording, setIsMeetingActive]);
 
   useEffect(() => {
@@ -866,6 +866,7 @@ export default function Home() {
                 onRecordingStart={handleRecordingStart}
                 onTranscriptReceived={handleTranscriptUpdate}
                 barHeights={barHeights}
+                setIsRecording={setIsRecording}
               />
             </div>
           </div>
