@@ -142,7 +142,7 @@ export default function Home() {
     checkRecordingState();
     
     // Set up a polling interval to periodically check recording state
-    const interval = setInterval(checkRecordingState, 5000); // Check every 5 seconds
+    const interval = setInterval(checkRecordingState, 1000); // Check every 1 second
     
     return () => clearInterval(interval);
   }, [isRecording, setIsMeetingActive]);
@@ -524,7 +524,7 @@ export default function Home() {
           setSummaryStatus('error');
           clearInterval(pollInterval);
         }
-      }, 5000); // Poll every 30 seconds
+      }, 3000); // Poll every 3 seconds
 
       // Cleanup interval on component unmount
       return () => clearInterval(pollInterval);
@@ -723,7 +723,7 @@ export default function Home() {
           setSummaryStatus('error');
           setAiSummary(null);
         }
-      }, 10000);
+      }, 1000);
 
       return () => clearInterval(pollInterval);
     } catch (error) {
