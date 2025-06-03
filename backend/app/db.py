@@ -406,7 +406,101 @@ class DatabaseManager:
         async with self._get_connection() as conn:
             cursor = await conn.execute(f"SELECT {api_key_name} FROM settings WHERE id = '1'")
             row = await cursor.fetchone()
-            return row[0] if row else None
+            return row[0] if row and row[0] else ""
+            
+    async def search_transcripts(self, query: str):
+        """Search through meeting transcripts for the given query"""
+        if not query or query.strip() == "":
+            return []
+            
+        # Convert query to lowercase for case-insensitive search
+        search_query = f"%{query.lower()}%"
+        
+        try:
+            async with self._get_connection() as conn:
+                # Search in transcripts table
+                cursor = await conn.execute("""
+                    SELECT m.id, m.title, t.transcript, t.timestamp
+                    FROM meetings m
+                    JOIN transcripts t ON m.id = t.meeting_id
+                    WHERE LOWER(t.transcript) LIKE ?
+                    ORDER BY m.created_at DESC
+                """, (search_query,))
+                
+                rows = await cursor.fetchall()
+                
+                # Also search in transcript_chunks for full transcripts
+                cursor2 = await conn.execute("""
+                    SELECT m.id, m.title, tc.transcript_text
+                    FROM meetings m
+                    JOIN transcript_chunks tc ON m.id = tc.meeting_id
+                    WHERE LOWER(tc.transcript_text) LIKE ?
+                    AND m.id NOT IN (SELECT DISTINCT meeting_id FROM transcripts WHERE LOWER(transcript) LIKE ?)
+                    ORDER BY m.created_at DESC
+                """, (search_query, search_query))
+                
+                chunk_rows = await cursor2.fetchall()
+                
+                # Format the results
+                results = []
+                
+                # Process transcript matches
+                for row in rows:
+                    meeting_id, title, transcript, timestamp = row
+                    
+                    # Find the matching context (snippet around the match)
+                    transcript_lower = transcript.lower()
+                    match_index = transcript_lower.find(query.lower())
+                    
+                    # Extract context around the match (100 chars before and after)
+                    start_index = max(0, match_index - 100)
+                    end_index = min(len(transcript), match_index + len(query) + 100)
+                    context = transcript[start_index:end_index]
+                    
+                    # Add ellipsis if we truncated the text
+                    if start_index > 0:
+                        context = "..." + context
+                    if end_index < len(transcript):
+                        context += "..."
+                    
+                    results.append({
+                        'id': meeting_id,
+                        'title': title,
+                        'matchContext': context,
+                        'timestamp': timestamp
+                    })
+                
+                # Process transcript_chunks matches
+                for row in chunk_rows:
+                    meeting_id, title, transcript_text = row
+                    
+                    # Find the matching context (snippet around the match)
+                    transcript_lower = transcript_text.lower()
+                    match_index = transcript_lower.find(query.lower())
+                    
+                    # Extract context around the match (100 chars before and after)
+                    start_index = max(0, match_index - 100)
+                    end_index = min(len(transcript_text), match_index + len(query) + 100)
+                    context = transcript_text[start_index:end_index]
+                    
+                    # Add ellipsis if we truncated the text
+                    if start_index > 0:
+                        context = "..." + context
+                    if end_index < len(transcript_text):
+                        context += "..."
+                    
+                    results.append({
+                        'id': meeting_id,
+                        'title': title,
+                        'matchContext': context,
+                        'timestamp': datetime.utcnow().isoformat()  # Use current time as fallback
+                    })
+                
+                return results
+                
+        except Exception as e:
+            logger.error(f"Error searching transcripts: {str(e)}")
+            raise
         
     async def delete_api_key(self, provider: str):
         """Delete the API key"""

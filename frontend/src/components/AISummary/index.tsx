@@ -617,70 +617,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
 
   return (
     <div className="relative">
-      <div className="flex justify-end mb-4 space-x-2">
-        <button
-          onClick={handleUndo}
-          disabled={currentHistoryIndex === 0}
-          className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
-          title="Undo"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-          </svg>
-        </button>
-        <button
-          onClick={handleRedo}
-          disabled={currentHistoryIndex === history.length - 1}
-          className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
-          title="Redo"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 7v6h-6" />
-            <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
-          </svg>
-        </button>
-        <button
-          onClick={handleAddSection}
-          className="p-2 hover:bg-gray-100 rounded"
-          title="Add new section"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
-      </div>
+
       
       {selectedBlocks.length > 1 && (
         <textarea
@@ -720,32 +657,89 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
         </div>
       )}
 
-      <div className="flex items-center space-x-2 mb-6">
-        <span className="text-2xl">✨</span>
-        <h2 className="text-2xl font-semibold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
-          AI Enhanced Summary
-        </h2>
-        <div className="ml-auto flex space-x-2">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <span className="text-2xl">✨</span>
+          <h2 className="text-2xl font-semibold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
+            AI Enhanced Summary
+          </h2>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleUndo}
+            disabled={currentHistoryIndex === 0}
+            className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
+            title="Undo"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 7v6h6" />
+              <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+            </svg>
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={currentHistoryIndex === history.length - 1}
+            className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
+            title="Redo"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 7v6h-6" />
+              <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
+            </svg>
+          </button>
+          <button
+            onClick={handleAddSection}
+            className="p-2 hover:bg-gray-100 rounded"
+            title="Add new section"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
           <button
             onClick={() => {
               const markdown = convertToMarkdown();
               navigator.clipboard.writeText(markdown);
             }}
-            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center space-x-1"
+            className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center space-x-1"
           >
             <span>📋</span>
-            <span>Copy as Markdown</span>
+            <span>Copy</span>
           </button>
-          {/* <button
-            onClick={handleExport}
-            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center space-x-1"
-          >
-            <span>📝</span>
-            <span>Export as Markdown</span>
-          </button> */}
           <button
             onClick={onRegenerateSummary}
-            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center space-x-1"
+            className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center space-x-1"
             title="Regenerate Summary"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

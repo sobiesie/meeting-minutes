@@ -37,16 +37,26 @@ class Section(BaseModel):
     title: str
     blocks: List[Block]
 
+class MeetingNotes(BaseModel):
+    """Represents the meeting notes"""
+    meeting_name: str
+    sections: List[Section]
+
+class People(BaseModel):
+    """Represents the people in the meeting. Always have this part in the output. Title - Person Name (Role, Details)"""
+    title: str
+    blocks: List[Block]
+
 class SummaryResponse(BaseModel):
     """Represents the meeting summary response based on a section of the transcript"""
     MeetingName : str
-    SectionSummary : Section
+    People : People
+    SessionSummary : Section
     CriticalDeadlines: Section
     KeyItemsDecisions: Section
     ImmediateActionItems: Section
     NextSteps: Section
-    OtherImportantPoints: Section
-    ClosingRemarks: Section
+    MeetingNotes: MeetingNotes
 
 # --- Main Class Used by main.py ---
 
@@ -56,7 +66,7 @@ class TranscriptProcessor:
         """Initialize the transcript processor."""
         logger.info("TranscriptProcessor initialized.")
         self.db = DatabaseManager()
-    async def process_transcript(self, text: str, model: str, model_name: str, chunk_size: int = 5000, overlap: int = 1000) -> Tuple[int, List[str]]:
+    async def process_transcript(self, text: str, model: str, model_name: str, chunk_size: int = 5000, overlap: int = 1000, custom_prompt: str = "") -> Tuple[int, List[str]]:
         """
         Process transcript text into chunks and generate structured summaries for each chunk using an AI model.
 
@@ -66,6 +76,7 @@ class TranscriptProcessor:
             model_name: The specific model name.
             chunk_size: The size of each text chunk.
             overlap: The overlap between consecutive chunks.
+            custom_prompt: A custom prompt to use for the AI model.
 
         Returns:
             A tuple containing:
@@ -136,6 +147,13 @@ class TranscriptProcessor:
                         Transcript Chunk:
                         ---
                         {chunk}
+                        ---
+
+                        The data is to be used for agentic actions like booking meetings and all. so please capture all relevant action items. Transcription can have spelling mistakes. correct it if required. context is important.
+                        
+                        While generating the summary, please add the following context:
+                        ---
+                        {custom_prompt}
                         ---
                         """,
                     )

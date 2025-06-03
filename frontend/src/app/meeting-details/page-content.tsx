@@ -26,6 +26,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   });
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [originalTranscript, setOriginalTranscript] = useState<string>('');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string>('');
   const { setCurrentMeeting, setMeetings } = useSidebar();
 
@@ -49,7 +51,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     console.log('Model config:', modelConfig);
   }, [modelConfig]);
 
-  const generateAISummary = useCallback(async () => {
+  const generateAISummary = useCallback(async (customPrompt: string = '') => {
     setSummaryStatus('processing');
     setSummaryError(null);
 
@@ -74,7 +76,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           model_name: modelConfig.model,
           meeting_id: meeting.id,
           chunk_size: 40000,
-          overlap: 1000
+          overlap: 1000,
+          custom_prompt: customPrompt
         }),
       });
 
@@ -331,14 +334,14 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     navigator.clipboard.writeText(header + date + fullTranscript);
   }, [transcripts, meeting, meetingTitle]);
 
-  const handleGenerateSummary = useCallback(async () => {
+  const handleGenerateSummary = useCallback(async (customPrompt: string = '') => {
     if (!transcripts.length) {
       console.log('No transcripts available for summary');
       return;
     }
     
     try {
-      await generateAISummary();
+      await generateAISummary(customPrompt);
     } catch (error) {
       console.error('Failed to generate summary:', error);
       if (error instanceof Error) {
@@ -437,18 +440,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           {/* Title area */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex flex-col space-y-3">
-              <div className="flex items-center">
-                <EditableTitle
-                  title={meetingTitle}
-                  isEditing={isEditingTitle}
-                  onStartEditing={() => setIsEditingTitle(true)}
-                  onFinishEditing={() => {
-                    setIsEditingTitle(false);
-                    handleSaveMeetingTitle();
-                  }}
-                  onChange={handleTitleChange}
-                />
-              </div>
+
               <div className="flex items-center space-x-2">
                 <button
                   onClick={handleCopyTranscript}
@@ -469,7 +461,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                 {transcripts?.length > 0 && (
                   <>
                     <button
-                      onClick={handleGenerateSummary}
+                      onClick={() => handleGenerateSummary(customPrompt)}
                       disabled={summaryStatus === 'processing'}
                       className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
                         summaryStatus === 'processing'
@@ -516,13 +508,37 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           </div>
 
           {/* Transcript content */}
-          <div className="flex-1 overflow-y-auto pb-32">
+          <div className="flex-1 overflow-y-auto pb-4">
             <TranscriptView transcripts={transcripts} />
           </div>
+          
+          {/* Custom prompt input at bottom of transcript section */}
+          {!isRecording && transcripts.length > 0 && (
+            <div className="p-1 border-t border-gray-200">
+              <textarea
+                placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm min-h-[80px] resize-y"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                disabled={summaryStatus === 'processing'}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right side - AI Summary */}
         <div className="flex-1 overflow-y-auto bg-white">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center">
+              <EditableTitle
+                title={meetingTitle}
+                isEditing={isEditingTitle}
+                onStartEditing={() => setIsEditingTitle(true)}
+                onFinishEditing={() => setIsEditingTitle(false)}
+                onChange={handleTitleChange}
+              />
+            </div>
+          </div>
           {isSummaryLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">

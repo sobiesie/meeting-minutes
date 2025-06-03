@@ -16,6 +16,14 @@ export interface CurrentMeeting {
   title: string;
 }
 
+// Search result type for transcript search
+interface TranscriptSearchResult {
+  id: string;
+  title: string;
+  matchContext: string;
+  timestamp: string;
+};
+
 interface SidebarContextType {
   currentMeeting: CurrentMeeting | null;
   setCurrentMeeting: (meeting: CurrentMeeting | null) => void;
@@ -23,9 +31,15 @@ interface SidebarContextType {
   isCollapsed: boolean;
   toggleCollapse: () => void;
   meetings: CurrentMeeting[];
-  setMeetings: React.Dispatch<React.SetStateAction<CurrentMeeting[]>>;
-  setIsMeetingActive: React.Dispatch<React.SetStateAction<boolean>>;
+  setMeetings: (meetings: CurrentMeeting[]) => void;
   isMeetingActive: boolean;
+  setIsMeetingActive: (active: boolean) => void;
+  isRecording: boolean;
+  setIsRecording: (recording: boolean) => void;
+  handleRecordingToggle: () => void;
+  searchTranscripts: (query: string) => Promise<void>;
+  searchResults: TranscriptSearchResult[];
+  isSearching: boolean;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -42,10 +56,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
-  const pathname = usePathname();
-  const router = useRouter();
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -75,24 +93,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const baseItems: SidebarItem[] = [
-    {
-      id: 'meetings',
-      title: 'Meetings',
-      type: 'folder' as const,
-      children: [
-        { id: 'intro-call', title: '+ New Call', type: 'file' as const },
-        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
-      ]
-    },
-    {
-      id: 'notes',
-      title: 'Notes',
-      type: 'folder' as const,
-      children: [
-        { id: 'project-ideas', title: 'Project Ideas', type: 'file' as const },
-        { id: 'action-items', title: 'Action Items', type: 'file' as const },
-      ]
-    }
+    ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const })),
+    // {
+    //   id: 'meetings',
+    //   title: 'Meetings',
+    //   type: 'folder' as const,
+    //   children: [
+    //     ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
+    //   ]
+    // },
   ];
 
  
@@ -114,8 +123,65 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     setSidebarItems(baseItems);
   }, [meetings]);
 
+  // Function to handle recording toggle from sidebar
+  const handleRecordingToggle = () => {
+    if (!isRecording) {
+      // If not recording, navigate to home page and set flag to start recording automatically
+      sessionStorage.setItem('autoStartRecording', 'true');
+      router.push('/');
+    }
+    // The actual recording start/stop is handled in the Home component
+  };
+  
+  // Function to search through meeting transcripts
+  const searchTranscripts = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    try {
+      setIsSearching(true);
+      const response = await fetch('http://localhost:5167/search-transcripts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to search transcripts');
+      }
+      
+      const results = await response.json();
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching transcripts:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   return (
-    <SidebarContext.Provider value={{ currentMeeting, setCurrentMeeting, sidebarItems, isCollapsed, toggleCollapse, meetings, setMeetings, isMeetingActive, setIsMeetingActive }}>
+    <SidebarContext.Provider value={{ 
+      currentMeeting, 
+      setCurrentMeeting, 
+      sidebarItems, 
+      isCollapsed, 
+      toggleCollapse, 
+      meetings, 
+      setMeetings, 
+      isMeetingActive, 
+      setIsMeetingActive,
+      isRecording,
+      setIsRecording,
+      handleRecordingToggle,
+      searchTranscripts,
+      searchResults,
+      isSearching
+    }}>
       {children}
     </SidebarContext.Provider>
   );

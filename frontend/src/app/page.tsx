@@ -38,13 +38,14 @@ interface OllamaModel {
 }
 
 export default function Home() {
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecordingState] = useState(false);
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
   const [barHeights, setBarHeights] = useState(['58%', '76%', '58%']);
   const [meetingTitle, setMeetingTitle] = useState('+ New Call');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
   const [aiSummary, setAiSummary] = useState<Summary | null>({
     key_points: { title: "Key Points", blocks: [] },
     action_items: { title: "Action Items", blocks: [] },
@@ -64,7 +65,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
 
-  const { setCurrentMeeting, setMeetings ,meetings, isMeetingActive, setIsMeetingActive} = useSidebar();
+  const { setCurrentMeeting, setMeetings, meetings, isMeetingActive, setIsMeetingActive, setIsRecording: setSidebarIsRecording } = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
 
@@ -128,11 +129,11 @@ export default function Home() {
         
         if (isCurrentlyRecording && !isRecording) {
           console.log('Recording is active in backend but not in UI, synchronizing state...');
-          setIsRecording(true);
+          setIsRecordingState(true);
           setIsMeetingActive(true);
         } else if (!isCurrentlyRecording && isRecording) {
           console.log('Recording is inactive in backend but active in UI, synchronizing state...');
-          setIsRecording(false);
+          setIsRecordingState(false);
         }
       } catch (error) {
         console.error('Failed to check recording state:', error);
@@ -146,6 +147,8 @@ export default function Home() {
     
     return () => clearInterval(interval);
   }, [isRecording, setIsMeetingActive]);
+  
+
 
   useEffect(() => {
     if (isRecording) {
@@ -162,6 +165,11 @@ export default function Home() {
       return () => clearInterval(interval);
     }
   }, [isRecording]);
+  
+  // Update sidebar recording state when local recording state changes
+  useEffect(() => {
+    setSidebarIsRecording(isRecording);
+  }, [isRecording, setSidebarIsRecording]);
 
   useEffect(() => {
     let unlistenFn: (() => void) | undefined;
@@ -273,15 +281,31 @@ export default function Home() {
         }
       });
       console.log('Recording started successfully');
-      setIsRecording(true);
+      setIsRecordingState(true); // This will also update the sidebar via the useEffect
       setTranscripts([]); // Clear previous transcripts when starting new recording
       setIsMeetingActive(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
       alert('Failed to start recording. Check console for details.');
-      setIsRecording(false); // Reset state on error
+      setIsRecordingState(false); // Reset state on error
     }
   };
+  
+  // Check for autoStartRecording flag and start recording automatically
+  useEffect(() => {
+    const checkAutoStartRecording = async () => {
+      if (typeof window !== 'undefined') {
+        const shouldAutoStart = sessionStorage.getItem('autoStartRecording');
+        if (shouldAutoStart === 'true' && !isRecording && !isMeetingActive) {
+          console.log('Auto-starting recording from navigation...');
+          sessionStorage.removeItem('autoStartRecording'); // Clear the flag
+          await handleRecordingStart();
+        }
+      }
+    };
+    
+    checkAutoStartRecording();
+  }, [isRecording, isMeetingActive]);
 
   const handleRecordingStop = async () => {
     try {
@@ -317,7 +341,7 @@ export default function Home() {
       // });
       // console.log('Transcript saved to:', transcriptPath);
 
-      setIsRecording(false);
+      setIsRecordingState(false);
       
       // Show summary button if we have transcript content
       if (formattedTranscript.trim()) {
@@ -335,7 +359,7 @@ export default function Home() {
         });
       }
       alert('Failed to stop recording. Check console for details.');
-      setIsRecording(false); // Reset state on error
+      setIsRecordingState(false); // Reset state on error
     }
   };
 
@@ -374,13 +398,13 @@ export default function Home() {
         });
 
         if (!response.ok) {
-          setIsRecording(false);
+          setIsRecordingState(false);
           throw new Error('Failed to save transcript to database');
         }
 
         const responseData = await response.json();
         const meetingId = responseData.meeting_id;
-        setMeetings((prev: CurrentMeeting[]) => [{ id: meetingId, title: meetingTitle }, ...prev]);
+        setMeetings([{ id: meetingId, title: meetingTitle }, ...meetings]);
         
         // Set current meeting and navigate
         setCurrentMeeting({ id: meetingId, title: meetingTitle });
@@ -388,7 +412,7 @@ export default function Home() {
         router.push('/meeting-details');
       }
 
-      setIsRecording(false);
+      setIsRecordingState(false);
       
       // Show summary button if we have transcript content
       if (transcripts.length > 0) {
@@ -398,7 +422,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error in handleRecordingStop2:', error);
-      setIsRecording(false);
+      setIsRecordingState(false);
     }
   };
 
@@ -421,7 +445,7 @@ export default function Home() {
     });
   };
 
-  const generateAISummary = useCallback(async () => {
+  const generateAISummary = useCallback(async (prompt: string = '') => {
     setSummaryStatus('processing');
     setSummaryError(null);
 
@@ -446,8 +470,9 @@ export default function Home() {
           model: modelConfig.provider,
           model_name: modelConfig.model,
           chunk_size: 40000,
-          overlap: 1000
-        })
+          overlap: 1000,
+          custom_prompt: prompt,
+        }),
       });
 
       if (!response.ok) {
@@ -752,7 +777,7 @@ export default function Home() {
     }
     
     try {
-      await generateAISummary();
+      await generateAISummary(customPrompt);
     } catch (error) {
       console.error('Failed to generate summary:', error);
       if (error instanceof Error) {
@@ -773,32 +798,75 @@ export default function Home() {
           {/* Title area */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex flex-col space-y-3">
-              <div className="flex items-center">
-                <EditableTitle
-                  title={meetingTitle}
-                  isEditing={isEditingTitle}
-                  onStartEditing={() => setIsEditingTitle(true)}
-                  onFinishEditing={() => setIsEditingTitle(false)}
-                  onChange={handleTitleChange}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={handleCopyTranscript}
-                  disabled={transcripts.length === 0}
-                  className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
-                    transcripts.length === 0
-                      ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300 active:bg-blue-200'
-                  }`}
-                  title={transcripts.length === 0 ? 'No transcript available' : 'Copy Transcript'}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V7.5l-3.75-3.612z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 3v3.75a.75.75 0 0 0 .75.75H18" />
-                  </svg>
-                  <span className="text-sm">Copy Transcript</span>
-                </button>
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleCopyTranscript}
+                    disabled={transcripts.length === 0}
+                    className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
+                      transcripts.length === 0
+                        ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300 active:bg-blue-200'
+                    }`}
+                    title={transcripts.length === 0 ? 'No transcript available' : 'Copy Transcript'}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V7.5l-3.75-3.612z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 3v3.75a.75.75 0 0 0 .75.75H18" />
+                    </svg>
+                    <span className="text-sm">Copy Transcript</span>
+                  </button>
+                  {showSummary && !isRecording && (
+                    <>
+                      <button
+                        onClick={handleGenerateSummary}
+                        disabled={summaryStatus === 'processing'}
+                        className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
+                          summaryStatus === 'processing'
+                            ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                            : transcripts.length === 0
+                            ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300 active:bg-green-200'
+                        }`}
+                        title={
+                          summaryStatus === 'processing'
+                            ? 'Generating summary...'
+                            : transcripts.length === 0
+                            ? 'No transcript available'
+                            : 'Generate AI Summary'
+                        }
+                      >
+                        {summaryStatus === 'processing' ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="text-sm">Processing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span className="text-sm">Generate Note</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowModelSettings(true)}
+                        className="px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 active:bg-gray-200"
+                        title="Model Settings"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+
                 {showSummary && !isRecording && (
                   <>
                     <button
@@ -856,6 +924,19 @@ export default function Home() {
           <div className="flex-1 overflow-y-auto pb-32">
             <TranscriptView transcripts={transcripts} />
           </div>
+          
+          {/* Custom prompt input at bottom of transcript section */}
+          {!isRecording && transcripts.length > 0 && !isMeetingActive && (
+            <div className="p-4 border-t border-gray-200">
+              <textarea
+                placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm min-h-[80px] resize-y"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                disabled={summaryStatus === 'processing'}
+              />
+            </div>
+          )}
 
           {/* Recording controls */}
           <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 z-10">
@@ -964,6 +1045,17 @@ export default function Home() {
 
         {/* Right side - AI Summary */}
         <div className="flex-1 overflow-y-auto bg-white">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center">
+              <EditableTitle
+                title={meetingTitle}
+                isEditing={isEditingTitle}
+                onStartEditing={() => setIsEditingTitle(true)}
+                onFinishEditing={() => setIsEditingTitle(false)}
+                onChange={handleTitleChange}
+              />
+            </div>
+          </div>
           {isSummaryLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
