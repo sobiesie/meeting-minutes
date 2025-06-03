@@ -28,6 +28,7 @@ const Sidebar: React.FC = () => {
     searchTranscripts,
     searchResults,
     isSearching,
+    meetings,
     setMeetings
   } = useSidebar();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings', 'notes']));
@@ -140,7 +141,8 @@ const Sidebar: React.FC = () => {
 
     if (response.ok) {
       console.log('Meeting deleted successfully');
-      setMeetings((prev: CurrentMeeting[]) => prev.filter(m => m.id !== itemId));
+      const updatedMeetings = meetings.filter((m: CurrentMeeting) => m.id !== itemId);
+      setMeetings(updatedMeetings);
       
       // If deleting the active meeting, navigate to home
       if (currentMeeting?.id === itemId) {
@@ -181,13 +183,13 @@ const Sidebar: React.FC = () => {
         <button
           onClick={handleRecordingToggle}
           disabled={isRecording}
-          className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} rounded-full transition-colors shadow-sm`}
+          className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors shadow-sm`}
           title={isRecording ? "Recording in progress..." : "Start New Call"}
         >
           {isRecording ? (
             <Square className="w-5 h-5 text-white" />
           ) : (
-            <Plus className="w-5 h-5 text-white" />
+            <Mic className="w-5 h-5 text-white" />
           )}
         </button>
         <button
@@ -349,26 +351,22 @@ const Sidebar: React.FC = () => {
         }`}
       >
         {/* Header with traffic light spacing */}
-        <div className="h-16 flex items-center border-b">
-          {/* Traffic light spacing */}
-          <div className="w-20 h-16" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
-          
+        <div className="h-22 flex items-center border-b">
+        
           {/* Title container */}
+          
+          
+          
           <div className="flex-1">
             {!isCollapsed && (
-              <h1 className="font-semibold text-sm">Meetily</h1>
-            )}
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {!isCollapsed && (
-            <div className="p-3 mb-3">
+              <div className="p-3">
+                <span className="text-lg font-semibold text-gray-700 mb-2 block items-center">
+                  <span>Meetily</span>
+                </span>
               <button
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
-                className={`w-full flex items-center justify-center px-3 py-2.5 text-sm font-medium text-white ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} rounded-lg transition-colors shadow-sm`}
+                className={`w-full flex items-center justify-center px-3 py-2.5 text-sm font-medium text-white ${isRecording ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-lg transition-colors shadow-sm`}
               >
                 {isRecording ? (
                   <>
@@ -382,6 +380,16 @@ const Sidebar: React.FC = () => {
                   </>
                 )}
               </button>
+            </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {!isCollapsed && (
+            <div className="p-3 mb-3 text-lg font-semibold items-center">
+              Meeting Notes
             </div>
           )}
           {renderCollapsedIcons()}
