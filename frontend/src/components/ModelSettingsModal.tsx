@@ -31,7 +31,7 @@ export function ModelSettingsModal({
 }: ModelSettingsModalProps) {
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState<string>('');
-  const [apiKey, setApiKey] = useState<string>(modelConfig.apiKey || '');
+  const [apiKey, setApiKey] = useState<string | null>(modelConfig.apiKey || null);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
   const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
@@ -44,7 +44,7 @@ export function ModelSettingsModal({
           const data = await response.json();
           if (data.provider !== null) {
             setModelConfig(data);
-            setApiKey(data.apiKey || '');
+            setApiKey(data.apiKey || null);
           }
         } catch (error) {
           console.error('Failed to fetch model config:', error);
@@ -73,7 +73,7 @@ export function ModelSettingsModal({
       setApiKey(data || '');
     } catch (err) {
       console.error('Error fetching API key:', err);
-      setApiKey('');
+      setApiKey(null);
     }
   };
 
@@ -108,7 +108,7 @@ export function ModelSettingsModal({
   };
 
   const requiresApiKey = modelConfig.provider === 'claude' || modelConfig.provider === 'groq' || modelConfig.provider === 'openai';
-  const isDoneDisabled = requiresApiKey && !apiKey.trim();
+  const isDoneDisabled = requiresApiKey && (!apiKey || (typeof apiKey === 'string' && !apiKey.trim()));
 
   useEffect(() => {
     const loadModels = async () => {
@@ -154,7 +154,7 @@ export function ModelSettingsModal({
   };
 
   const handleSave = () => {
-    const updatedConfig = { ...modelConfig, apiKey: apiKey.trim() };
+    const updatedConfig = { ...modelConfig, apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null };
     setModelConfig(updatedConfig);
     console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
     setShowModelSettings(false);
@@ -232,7 +232,7 @@ export function ModelSettingsModal({
               <div className="relative">
                 <input
                   type={showApiKey ? "text" : "password"}
-                  value={apiKey}
+                  value={apiKey || ''}
                   onChange={(e) => setApiKey(e.target.value)}
                   disabled={isApiKeyLocked}
                   className={`w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-24 ${

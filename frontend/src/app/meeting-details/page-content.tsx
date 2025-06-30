@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
+import { debounce } from 'lodash';
 import { Transcript, Summary, SummaryResponse } from '@/types';
 import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
@@ -29,7 +30,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string>('');
-  const { setCurrentMeeting, setMeetings } = useSidebar();
+  const [meetings, setLocalMeetings] = useState<CurrentMeeting[]>([]);
+  const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
+  
+  // Keep local meetings state in sync with sidebar meetings
+  useEffect(() => {
+    setLocalMeetings(sidebarMeetings);
+  }, [sidebarMeetings]);
 
   useEffect(() => {
     const fetchModelConfig = async () => {
@@ -134,7 +141,11 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             // Update meeting title if available
             if (MeetingName) {
               setMeetingTitle(MeetingName);
-              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: MeetingName } : m));
+              // Update meetings with new title
+              const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) => 
+                m.id === meeting.id ? { id: m.id, title: MeetingName } : m
+              );
+              setMeetings(updatedMeetings);
               setCurrentMeeting({ id: meeting.id, title: MeetingName });
             }
             
@@ -185,8 +196,62 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     setAiSummary(summary);
   }, []);
 
+  const handleSaveSummary = async (summary: Summary) => {
+    try {
+      // Format the summary in a structure that the backend expects
+      const formattedSummary = {
+        MeetingName: meetingTitle,
+        MeetingNotes: {
+          sections: Object.entries(summary).map(([key, section]) => ({
+            title: section.title,
+            blocks: section.blocks
+          }))
+        }
+      };
+      
+      const payload = {
+        meeting_id: meeting.id,
+        summary: formattedSummary
+      };
+      console.log('Saving meeting summary with payload:', payload);
+      
+      const response = await fetch('http://localhost:5167/save-meeting-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Save meeting summary failed:', errorData);
+        throw new Error(errorData.error || 'Failed to save meeting summary');
+      }
+      
+      const responseData = await response.json();
+      console.log('Save meeting summary success:', responseData);
+    } catch (error) {
+      console.error('Failed to save meeting summary:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Failed to save meeting summary: Unknown error');
+      }
+    }
+  };
+
+  // Create a debounced version of the save function to avoid excessive API calls
+  const debouncedSaveSummary = useCallback(
+    debounce((summary: Summary) => {
+      handleSaveSummary(summary);
+    }, 2000),
+    [meeting.id, handleSaveSummary]
+  );
+
   const handleSummaryChange = (newSummary: Summary) => {
     setAiSummary(newSummary);
+    debouncedSaveSummary(newSummary);
   };
 
   const handleTitleChange = (newTitle: string) => {
@@ -275,7 +340,11 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             // Update meeting title if available
             if (MeetingName) {
               setMeetingTitle(MeetingName);
-              setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: MeetingName } : m));
+              // Update meetings with new title
+              const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) => 
+                m.id === meeting.id ? { id: m.id, title: MeetingName } : m
+              );
+              setMeetings(updatedMeetings);
               setCurrentMeeting({ id: meeting.id, title: MeetingName });
             }
 
@@ -378,8 +447,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       const responseData = await response.json();
       console.log('Save meeting title success:', responseData);
       
-      setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: meetingTitle } : m));
+      // Update meetings with new title
+      const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) => 
+        m.id === meeting.id ? { id: m.id, title: meetingTitle } : m
+      );
+      setMeetings(updatedMeetings);
       setCurrentMeeting({ id: meeting.id, title: meetingTitle });
+      return true;
     } catch (error) {
       console.error('Failed to save meeting title:', error);
       if (error instanceof Error) {
@@ -387,6 +461,39 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       } else {
         setError('Failed to save meeting title: Unknown error');
       }
+      return false;
+    }
+  };
+  
+  // Function to save all changes (title and summary)
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
+  
+  const saveAllChanges = async () => {
+    setIsSaving(true);
+    setSaveSuccess(null);
+    
+    try {
+      // Save meeting title
+      const titleSaved = await handleSaveMeetingTitle();
+      
+      // Save summary if it exists
+      let summarySaved = true;
+      if (aiSummary) {
+        await handleSaveSummary(aiSummary);
+      }
+      
+      setSaveSuccess(titleSaved && summarySaved);
+      
+      // Show success message briefly
+      setTimeout(() => {
+        setSaveSuccess(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to save changes:', error);
+      setSaveSuccess(false);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -529,14 +636,56 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
         {/* Right side - AI Summary */}
         <div className="flex-1 overflow-y-auto bg-white">
           <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center">
-              <EditableTitle
-                title={meetingTitle}
-                isEditing={isEditingTitle}
-                onStartEditing={() => setIsEditingTitle(true)}
-                onFinishEditing={() => setIsEditingTitle(false)}
-                onChange={handleTitleChange}
-              />
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <EditableTitle
+                  title={meetingTitle}
+                  isEditing={isEditingTitle}
+                  onStartEditing={() => setIsEditingTitle(true)}
+                  onFinishEditing={() => setIsEditingTitle(false)}
+                  onChange={handleTitleChange}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={saveAllChanges}
+                  disabled={isSaving}
+                  className={`px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-sm ${isSaving ? 'bg-gray-200 text-gray-500' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
+                >
+                  {isSaving ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      </svg>
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+                {saveSuccess === true && (
+                  <span className="text-green-500 flex items-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Saved
+                  </span>
+                )}
+                {saveSuccess === false && (
+                  <span className="text-red-500 flex items-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Failed to save
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           {isSummaryLoading ? (
