@@ -509,12 +509,29 @@ async def save_model_config(request: SaveModelConfigRequest):
 class GetApiKeyRequest(BaseModel):
     provider: str
 
-@app.post("/get-api-key")
+@app.get("/get-api-key")
 async def get_api_key(request: GetApiKeyRequest):
     try:
         api_key = await db.get_api_key(request.provider)
-        return JSONResponse(content={"apiKey": api_key})
+        return {"api_key": api_key}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class MeetingSummaryUpdate(BaseModel):
+    meeting_id: str
+    summary: dict
+
+@app.post("/save-meeting-summary")
+async def save_meeting_summary(data: MeetingSummaryUpdate):
+    """Save a meeting summary"""
+    try:
+        await db.update_meeting_summary(data.meeting_id, data.summary)
+        return {"message": "Meeting summary saved successfully"}
+    except ValueError as ve:
+        logger.error(f"Value error saving meeting summary: {str(ve)}")
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error saving meeting summary: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 class SearchRequest(BaseModel):

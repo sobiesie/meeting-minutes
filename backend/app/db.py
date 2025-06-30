@@ -518,6 +518,38 @@ class DatabaseManager:
         async with self._get_connection() as conn:
             await conn.execute(f"UPDATE settings SET {api_key_name} = NULL WHERE id = '1'")
             await conn.commit()
+    
+    async def update_meeting_summary(self, meeting_id: str, summary: dict):
+        """Update a meeting's summary"""
+        now = datetime.utcnow().isoformat()
+        try:
+            async with self._get_connection() as conn:
+                # Check if the meeting exists
+                cursor = await conn.execute("SELECT id FROM meetings WHERE id = ?", (meeting_id,))
+                meeting = await cursor.fetchone()
+                
+                if not meeting:
+                    raise ValueError(f"Meeting with ID {meeting_id} not found")
+                
+                # Update the summary in the summary_processes table
+                await conn.execute("""
+                    UPDATE summary_processes
+                    SET result = ?, updated_at = ?
+                    WHERE meeting_id = ?
+                """, (json.dumps(summary), now, meeting_id))
+                
+                # Update the meeting's updated_at timestamp
+                await conn.execute("""
+                    UPDATE meetings
+                    SET updated_at = ?
+                    WHERE id = ?
+                """, (now, meeting_id))
+                
+                await conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error updating meeting summary: {str(e)}")
+            raise
             
    
 
