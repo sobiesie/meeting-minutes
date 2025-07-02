@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { ConfirmationModal } from '../ConfirmationModel/confirmation-modal';
+import { ModelSettingsModal, ModelConfig } from '@/components/ModelSettingsModal';
 
 interface SidebarItem {
   id: string;
@@ -33,6 +34,13 @@ const Sidebar: React.FC = () => {
   } = useSidebar();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings', 'notes']));
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showModelSettings, setShowModelSettings] = useState(false);
+  const [modelConfig, setModelConfig] = useState<ModelConfig>({
+    provider: 'ollama',
+    model: 'llama3.2:latest',
+    whisperModel: 'large-v3',
+    apiKey: null
+  });
   
   // Ensure 'meetings' folder is always expanded
   useEffect(() => {
@@ -43,6 +51,28 @@ const Sidebar: React.FC = () => {
     }
   }, [expandedFolders]);
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
+  
+  // Handle model config save
+  const handleSaveModelConfig = async (config: ModelConfig) => {
+    try {
+      const response = await fetch('http://localhost:5167/save-model-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      setModelConfig(config);
+      console.log('Model config saved successfully');
+    } catch (error) {
+      console.error('Error saving model config:', error);
+    }
+  };
   
   // Handle search input changes
   const handleSearchChange = useCallback(async (value: string) => {
@@ -130,6 +160,7 @@ const Sidebar: React.FC = () => {
     const payload = {
       meeting_id: itemId
     };
+    
     const response = await fetch('http://localhost:5167/delete-meeting', {
       cache: 'no-store',
       method: 'POST',
@@ -138,7 +169,7 @@ const Sidebar: React.FC = () => {
       },
       body: JSON.stringify(payload)
     });
-
+    
     if (response.ok) {
       console.log('Meeting deleted successfully');
       const updatedMeetings = meetings.filter((m: CurrentMeeting) => m.id !== itemId);
@@ -152,6 +183,13 @@ const Sidebar: React.FC = () => {
     } else {
       console.error('Failed to delete meeting');
     }
+  };
+  
+  const handleDeleteConfirm = () => {
+    if (deleteModalState.itemId) {
+      handleDelete(deleteModalState.itemId);
+    }
+    setDeleteModalState({ isOpen: false, itemId: null });
   };
 
   const toggleFolder = (folderId: string) => {
@@ -180,6 +218,9 @@ const Sidebar: React.FC = () => {
     return (
       <div className="flex flex-col items-center space-y-4 mt-4">
         {/* New Call button for collapsed sidebar */}
+        <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
+          <span className='m-3'>Me</span>
+        </span>
         <button
           onClick={handleRecordingToggle}
           disabled={isRecording}
@@ -192,6 +233,15 @@ const Sidebar: React.FC = () => {
             <Mic className="w-5 h-5 text-white" />
           )}
         </button>
+        
+        <button
+          onClick={() => router.push('/')}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Home"
+        >
+          <Home className="w-5 h-5 text-gray-600" />
+        </button>
+        
         <button
           onClick={() => {
             if (isCollapsed) toggleCollapse();
@@ -200,7 +250,14 @@ const Sidebar: React.FC = () => {
           className="p-2 hover:bg-gray-100 rounded-md transition-colors"
           title="Meetings"
         >
-          <Calendar className="w-5 h-5 text-gray-600" />
+          <StickyNote className="w-5 h-5 text-gray-600" />
+        </button>
+        <button
+          onClick={() => setShowModelSettings(true)}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Settings"
+        >
+          <Settings className="w-5 h-5 text-gray-600" />
         </button>
         {/* <button
           onClick={() => {
@@ -360,26 +417,31 @@ const Sidebar: React.FC = () => {
           <div className="flex-1">
             {!isCollapsed && (
               <div className="p-3">
-                <span className="text-lg font-semibold text-gray-700 mb-2 block items-center">
+                <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
                   <span>Meetily</span>
                 </span>
-              <button
-                onClick={handleRecordingToggle}
-                disabled={isRecording}
-                className={`w-full flex items-center justify-center px-3 py-2.5 text-sm font-medium text-white ${isRecording ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-lg transition-colors shadow-sm`}
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="w-4 h-4 mr-2" />
-                    <span>Recording in progress...</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4 mr-2" />
-                    <span>Start Recording</span>
-                  </>
-                )}
-              </button>
+                
+                <div className="relative mb-1">
+              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                <Search className="h-3.5 w-3.5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search meeting content..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="block w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-500"
+                >
+                  <span className="text-xs">×</span>
+                </button>
+              )}
+            </div>
+           
             </div>
             )}
           </div>
@@ -400,45 +462,59 @@ const Sidebar: React.FC = () => {
 
         {/* Footer */}
         {!isCollapsed && (
+          
           <div className="p-2 border-t border-gray-100">
-            <div className="relative mb-1">
-              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                <Search className="h-3.5 w-3.5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search meeting content..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="block w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {searchQuery && (
+            <button
+                onClick={handleRecordingToggle}
+                disabled={isRecording}
+                className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white ${isRecording ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-lg transition-colors shadow-sm`}
+              >
+                {isRecording ? (
+                  <>
+                    <Square className="w-4 h-4 mr-2" />
+                    <span>Recording in progress...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-4 h-4 mr-2" />
+                    <span>Start Recording</span>
+                  </>
+                )}
+              </button>
+              <div className="mt-2">
                 <button
-                  onClick={() => handleSearchChange('')}
-                  className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-500"
-                >
-                  <span className="text-xs">×</span>
-                </button>
-              )}
-            </div>
-            <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
+                  onClick={() => setShowModelSettings(true)}
+                  className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-200 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    <span>Settings</span>
+                  </button>
+              </div>
+              <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
               v0.0.5 - Pre Release
             </div>
           </div>
         )}
       </div>
 
+      {/* Confirmation Modal for Delete */}
       <ConfirmationModal
         isOpen={deleteModalState.isOpen}
-        onConfirm={() => {
-          if (deleteModalState.itemId) {
-            handleDelete(deleteModalState.itemId);
-          }
-          setDeleteModalState({ isOpen: false, itemId: null });
-        }}
-        onCancel={() => setDeleteModalState({ isOpen: false, itemId: null })}
         text="Are you sure you want to delete this meeting? This action cannot be undone."
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteModalState({ isOpen: false, itemId: null })}
       />
+
+      {/* Model Settings Modal */}
+      {showModelSettings && (
+        <ModelSettingsModal
+          showModelSettings={showModelSettings}
+          setShowModelSettings={setShowModelSettings}
+          modelConfig={modelConfig}
+          setModelConfig={setModelConfig}
+          onSave={handleSaveModelConfig}
+        />
+      )}
     </div>
   );
 };
