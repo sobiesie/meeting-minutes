@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ModelConfig, ModelSettingsModal } from "./ModelSettingsModal"
+import { TranscriptSettings, TranscriptModelProps } from "./TranscriptSettings"
 
 interface SettingTabsProps {
     showModelSettings: boolean;
@@ -7,9 +8,12 @@ interface SettingTabsProps {
     modelConfig: ModelConfig;
     setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
     onSave: (config: ModelConfig) => void;
+    transcriptModelConfig: TranscriptModelProps;
+    setTranscriptModelConfig: (config: TranscriptModelProps) => void;
+    onSaveTranscript: (config: TranscriptModelProps) => void;
 }
 
-export function SettingTabs({ showModelSettings, setShowModelSettings, modelConfig, setModelConfig, onSave }: SettingTabsProps) {
+export function SettingTabs({ showModelSettings, setShowModelSettings, modelConfig, setModelConfig, onSave, transcriptModelConfig, setTranscriptModelConfig, onSaveTranscript }: SettingTabsProps) {
     return (
         <Tabs defaultValue="account" className="w-[400px]">
   <TabsList>
@@ -19,13 +23,19 @@ export function SettingTabs({ showModelSettings, setShowModelSettings, modelConf
   <TabsContent value="account">
     <ModelSettingsModal
 // showModelSettings={showModelSettings}
-setShowModelSettings={setShowModelSettings}
+    // setShowModelSettings={setShowModelSettings}
 modelConfig={modelConfig}
 setModelConfig={setModelConfig}
 onSave={onSave}
 />
   </TabsContent>
-  <TabsContent value="password">Change your password here.</TabsContent>
+  <TabsContent value="password">
+    <TranscriptSettings
+    transcriptModelConfig={transcriptModelConfig}
+    setTranscriptModelConfig={setTranscriptModelConfig}
+    onSave={onSaveTranscript}
+  />
+  </TabsContent>
 </Tabs>
     )
 }

@@ -88,6 +88,20 @@ class DatabaseManager:
                 )
             """)
 
+            # Create transcript_settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS transcript_settings (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    whisperApiKey TEXT,
+                    deepgramApiKey TEXT,
+                    elevenLabsApiKey TEXT,
+                    groqApiKey TEXT,
+                    openaiApiKey TEXT
+                )
+            """)
+
             conn.commit()
 
     @asynccontextmanager
@@ -407,7 +421,67 @@ class DatabaseManager:
             cursor = await conn.execute(f"SELECT {api_key_name} FROM settings WHERE id = '1'")
             row = await cursor.fetchone()
             return row[0] if row and row[0] else ""
-            
+
+    async def save_transcript_settings(self, provider: str, model: str):
+        """Save the transcript settings"""
+        async with self._get_connection() as conn:
+            # Check if the configuration already exists
+            cursor = await conn.execute("SELECT id FROM transcript_settings")
+            existing_config = await cursor.fetchone()
+            if existing_config:
+                # Update existing configuration
+                await conn.execute("""
+                    UPDATE transcript_settings 
+                    SET provider = ?, model = ?
+                    WHERE id = '1'
+                """, (provider, model))
+            else:
+                # Insert new configuration
+                await conn.execute("""
+                    INSERT INTO transcript_settings (id, provider, model)
+                    VALUES (?, ?, ?)
+                """, ('1', provider, model))
+            await conn.commit()
+
+    async def save_transcript_api_key(self, api_key: str, provider: str):
+        """Save the transcript API key"""
+        provider_list = ["localWhisper","deepgram","elevenLabs","groq","openai"]
+        if provider not in provider_list:
+            raise ValueError(f"Invalid provider: {provider}")
+        if provider == "localWhisper":
+            api_key_name = "localWhisperApiKey"
+        elif provider == "deepgram":
+            api_key_name = "deepgramApiKey"
+        elif provider == "elevenLabs":
+            api_key_name = "elevenLabsApiKey"
+        elif provider == "groq":
+            api_key_name = "groqApiKey"
+        elif provider == "openai":
+            api_key_name = "openaiApiKey"
+        async with self._get_connection() as conn:
+            await conn.execute(f"UPDATE transcript_settings SET {api_key_name} = ? WHERE id = '1'", (api_key,))
+            await conn.commit()
+
+    async def get_transcript_api_key(self, provider: str):
+        """Get the transcript API key"""
+        provider_list = ["localWhisper","deepgram","elevenLabs","groq","openai"]
+        if provider not in provider_list:
+            raise ValueError(f"Invalid provider: {provider}")
+        if provider == "localWhisper":
+            api_key_name = "localWhisperApiKey"
+        elif provider == "deepgram":
+            api_key_name = "deepgramApiKey"
+        elif provider == "elevenLabs":
+            api_key_name = "elevenLabsApiKey"
+        elif provider == "groq":
+            api_key_name = "groqApiKey"
+        elif provider == "openai":
+            api_key_name = "openaiApiKey"
+        async with self._get_connection() as conn:
+            cursor = await conn.execute(f"SELECT {api_key_name} FROM transcript_settings WHERE id = '1'")
+            row = await cursor.fetchone()
+            return row[0] if row and row[0] else ""
+
     async def search_transcripts(self, query: str):
         """Search through meeting transcripts for the given query"""
         if not query or query.strip() == "":

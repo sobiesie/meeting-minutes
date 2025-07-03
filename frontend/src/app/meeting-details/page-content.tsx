@@ -35,7 +35,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     model: 'llama3.2:latest',
     whisperModel: 'large-v3'
   });
-  const [transcriptSettings, setTranscriptSettings] = useState<TranscriptModelProps | null>({
+  const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'localWhisper',
     model: 'large-v3',
   });
@@ -74,18 +74,25 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
   useEffect(() => {
     const fetchTranscriptSettings = async () => {
-      const response = await fetch('http://localhost:5167/get-transcript-settings');
-      const data = await response.json();
-      if (data.provider !== null) {
-        setTranscriptSettings(data);
+      try {
+        const response = await fetch('http://localhost:5167/get-transcript-settings');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.provider !== null) {
+          setTranscriptModelConfig(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transcript settings:', error);
       }
     };
     fetchTranscriptSettings();
   }, []);
 
   useEffect(() => {
-    console.log('Transcript settings:', transcriptSettings);
-  }, [transcriptSettings]);
+    console.log('Transcript settings:', transcriptModelConfig);
+  }, [transcriptModelConfig]);
 
   const generateAISummary = useCallback(async (customPrompt: string = '') => {
     setSummaryStatus('processing');
@@ -566,6 +573,42 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     }
   };
 
+  const handleSaveTranscriptConfig = async (updatedConfig?: TranscriptModelProps) => {
+    try {
+      const configToSave = updatedConfig || transcriptModelConfig;
+      const payload = {
+        provider: configToSave.provider,
+        model: configToSave.model,
+        apiKey: configToSave.apiKey ?? null
+      };
+      console.log('Saving transcript config with payload:', payload);
+      
+      const response = await fetch('http://localhost:5167/save-transcript-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Save transcript config failed:', errorData);
+        console.error('Response status:', response.status);
+        throw new Error(errorData.error || 'Failed to save transcript config');
+      }
+
+      const responseData = await response.json();
+      console.log('Save transcript config success:', responseData);
+    } catch (error) {
+      console.error('Failed to save transcript config:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Failed to save transcript config: Unknown error');
+      }
+    }
+  };
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
 
   return (
@@ -646,6 +689,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                           modelConfig={modelConfig}
                           setModelConfig={setModelConfig}
                           onSave={handleSaveModelConfig}
+                          transcriptModelConfig={transcriptModelConfig}
+                          setTranscriptModelConfig={setTranscriptModelConfig}
+                          onSaveTranscript={handleSaveTranscriptConfig}
                         />
                       </DialogContent>
                     </Dialog>
