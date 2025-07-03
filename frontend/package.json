@@ -13,6 +13,8 @@
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
+        "@radix-ui/react-dialog": "^1.1.14",
+        "@radix-ui/react-tabs": "^1.1.12",
         "@remirror/core": "^3.0.1",
         "@remirror/extension-bold": "^3.0.1",
         "@remirror/extension-italic": "^3.0.1",
@@ -28,13 +30,17 @@
         "@tiptap/react": "^2.10.4",
         "@tiptap/starter-kit": "^2.10.4",
         "@types/lodash": "^4.17.13",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
         "framer-motion": "^11.15.0",
         "lodash": "^4.17.21",
         "lucide-react": "^0.469.0",
         "next": "14.2.25",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
-        "react-markdown": "^9.0.1"
+        "react-markdown": "^9.0.1",
+        "tailwind-merge": "^3.3.1",
+        "tailwindcss-animate": "^1.0.7"
     },
     "devDependencies": {
         "@tailwindcss/typography": "^0.5.15",

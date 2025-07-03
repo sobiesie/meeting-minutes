@@ -15,7 +15,7 @@ interface OllamaModel {
 }
 
 interface ModelSettingsModalProps {
-  showModelSettings: boolean;
+  // showModelSettings: boolean;
   setShowModelSettings: (show: boolean) => void;
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
@@ -23,7 +23,7 @@ interface ModelSettingsModalProps {
 }
 
 export function ModelSettingsModal({
-  showModelSettings,
+  // showModelSettings,
   setShowModelSettings,
   modelConfig,
   setModelConfig,
@@ -37,7 +37,7 @@ export function ModelSettingsModal({
   const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
 
   useEffect(() => {
-    if (showModelSettings) {
+    // if (showModelSettings) {
       const fetchModelConfig = async () => {
         try {
           const response = await fetch('http://localhost:5167/get-model-config');
@@ -52,8 +52,8 @@ export function ModelSettingsModal({
       };
 
       fetchModelConfig();
-    }
-  }, [showModelSettings]);
+    // }
+  }, []);
 
   const fetchApiKey = async (provider: string) => {
     try {
@@ -168,11 +168,11 @@ export function ModelSettingsModal({
     }
   };
 
-  if (!showModelSettings) return null;
+    // if (!showModelSettings) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+    // <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Model Settings</h3>
           <button
@@ -329,6 +329,6 @@ export function ModelSettingsModal({
           </button>
         </div>
       </div>
-    </div>
+    // </div>
   );
 } 
