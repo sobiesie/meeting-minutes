@@ -13,7 +13,11 @@
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
+        "@hookform/resolvers": "^5.1.1",
         "@radix-ui/react-dialog": "^1.1.14",
+        "@radix-ui/react-label": "^2.1.7",
+        "@radix-ui/react-select": "^2.2.5",
+        "@radix-ui/react-slot": "^1.2.3",
         "@radix-ui/react-tabs": "^1.1.12",
         "@remirror/core": "^3.0.1",
         "@remirror/extension-bold": "^3.0.1",
@@ -38,9 +42,11 @@
         "next": "14.2.25",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
+        "react-hook-form": "^7.59.0",
         "react-markdown": "^9.0.1",
         "tailwind-merge": "^3.3.1",
-        "tailwindcss-animate": "^1.0.7"
+        "tailwindcss-animate": "^1.0.7",
+        "zod": "^3.25.71"
     },
     "devDependencies": {
         "@tailwindcss/typography": "^0.5.15",

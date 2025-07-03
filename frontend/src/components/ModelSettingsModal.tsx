@@ -16,7 +16,7 @@ interface OllamaModel {
 
 interface ModelSettingsModalProps {
   // showModelSettings: boolean;
-  setShowModelSettings: (show: boolean) => void;
+  // setShowModelSettings: (show: boolean) => void;
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSave: (config: ModelConfig) => void;
@@ -24,7 +24,7 @@ interface ModelSettingsModalProps {
 
 export function ModelSettingsModal({
   // showModelSettings,
-  setShowModelSettings,
+  // setShowModelSettings,
   modelConfig,
   setModelConfig,
   onSave
@@ -157,7 +157,7 @@ export function ModelSettingsModal({
     const updatedConfig = { ...modelConfig, apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null };
     setModelConfig(updatedConfig);
     console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
-    setShowModelSettings(false);
+    // setShowModelSettings(false);
     onSave(updatedConfig);
   };
 
@@ -176,7 +176,7 @@ export function ModelSettingsModal({
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Model Settings</h3>
           <button
-            onClick={() => setShowModelSettings(false)}
+            // onClick={() => setShowModelSettings(false)}
             className="text-gray-500 hover:text-gray-700"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

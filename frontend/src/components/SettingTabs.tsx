@@ -18,7 +18,7 @@ export function SettingTabs({ showModelSettings, setShowModelSettings, modelConf
   </TabsList>
   <TabsContent value="account">
     <ModelSettingsModal
-showModelSettings={showModelSettings}
+// showModelSettings={showModelSettings}
 setShowModelSettings={setShowModelSettings}
 modelConfig={modelConfig}
 setModelConfig={setModelConfig}
