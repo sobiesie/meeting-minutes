@@ -15,16 +15,12 @@ interface OllamaModel {
 }
 
 interface ModelSettingsModalProps {
-  // showModelSettings: boolean;
-  // setShowModelSettings: (show: boolean) => void;
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSave: (config: ModelConfig) => void;
 }
 
 export function ModelSettingsModal({
-  // showModelSettings,
-  // setShowModelSettings,
   modelConfig,
   setModelConfig,
   onSave
@@ -329,6 +325,5 @@ export function ModelSettingsModal({
           </button>
         </div>
       </div>
-    // </div>
   );
 } 

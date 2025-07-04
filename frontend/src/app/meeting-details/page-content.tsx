@@ -6,17 +6,18 @@ import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
 import { AISummary } from '@/components/AISummary';
 import { CurrentMeeting, useSidebar } from '@/components/Sidebar/SidebarProvider';
-import { ModelSettingsModal, ModelConfig } from '@/components/ModelSettingsModal';
+import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SettingTabs } from '@/components/SettingTabs';
-import { TranscriptSettings, TranscriptModelProps } from '@/components/TranscriptSettings';
+import {TranscriptModelProps } from '@/components/TranscriptSettings';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { MessageToast } from '@/components/MessageToast';
+
+
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -45,6 +46,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string>('');
   const [meetings, setLocalMeetings] = useState<CurrentMeeting[]>([]);
+  const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
   const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
   
   // Keep local meetings state in sync with sidebar meetings
@@ -93,6 +95,17 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   useEffect(() => {
     console.log('Transcript settings:', transcriptModelConfig);
   }, [transcriptModelConfig]);
+
+  // Reset settings save success after showing toast
+  useEffect(() => {
+    if (settingsSaveSuccess !== null) {
+      const timer = setTimeout(() => {
+        setSettingsSaveSuccess(null);
+      }, 3000); // Same duration as toast
+      
+      return () => clearTimeout(timer);
+    }
+  }, [settingsSaveSuccess]);
 
   const generateAISummary = useCallback(async (customPrompt: string = '') => {
     setSummaryStatus('processing');
@@ -561,10 +574,12 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
       const responseData = await response.json();
       console.log('Save model config success:', responseData);
+      setSettingsSaveSuccess(true);
 
       setModelConfig(payload);
     } catch (error) {
       console.error('Failed to save model config:', error);
+      setSettingsSaveSuccess(false);
       if (error instanceof Error) {
         setError(error.message);
       } else {
@@ -600,8 +615,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
       const responseData = await response.json();
       console.log('Save transcript config success:', responseData);
+      setSettingsSaveSuccess(true);
     } catch (error) {
       console.error('Failed to save transcript config:', error);
+      setSettingsSaveSuccess(false);
       if (error instanceof Error) {
         setError(error.message);
       } else {
@@ -690,8 +707,19 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                           transcriptModelConfig={transcriptModelConfig}
                           setTranscriptModelConfig={setTranscriptModelConfig}
                           onSaveTranscript={handleSaveTranscriptConfig}
+                          setSaveSuccess={setSettingsSaveSuccess}
                         />
+                        {settingsSaveSuccess !== null && (
+                          <DialogFooter>
+                            <MessageToast 
+                              message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} 
+                              type={settingsSaveSuccess ? 'success' : 'error'} 
+                            />
+                          </DialogFooter>
+                        )}
                       </DialogContent>
+                      
+
                     </Dialog>
                   
                   </>

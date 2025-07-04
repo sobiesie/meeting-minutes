@@ -17,7 +17,9 @@ const serverSettingsSchema = z.object({
 
 type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
-export function ServerSettings() {
+export function ServerSettings(
+    {setSaveSuccess}: {setSaveSuccess: (success: boolean) => void}
+) {
     const form = useForm<ServerSettings>({
         resolver: zodResolver(serverSettingsSchema),
         defaultValues: {
@@ -40,11 +42,16 @@ export function ServerSettings() {
         loadSettings();
     }, []);
     const onSubmit = async (data: ServerSettings) => {
+        try {
         const store = await load('store.json', { autoSave: false });
         await store.set('appServerUrl', data.appServerUrl);
         await store.set('transcriptServerUrl', data.transcriptServerUrl);
         await store.save();
+        setSaveSuccess(true);
         console.log(data);
+        } catch (error) {
+            setSaveSuccess(false);
+        }
     };
     return (
         <Form {...form}>
