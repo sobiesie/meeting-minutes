@@ -17,6 +17,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+
 import { MessageToast } from '../MessageToast';
 
 interface SidebarItem {
@@ -41,7 +42,8 @@ const Sidebar: React.FC = () => {
     searchResults,
     isSearching,
     meetings,
-    setMeetings
+    setMeetings,
+    serverAddress
   } = useSidebar();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings', 'notes']));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -81,7 +83,7 @@ const Sidebar: React.FC = () => {
   // Handle model config save
   const handleSaveModelConfig = async (config: ModelConfig) => {
     try {
-      const response = await fetch('http://localhost:5167/save-model-config', {
+      const response = await fetch(`${serverAddress}/save-model-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +114,7 @@ const Sidebar: React.FC = () => {
       };
       console.log('Saving transcript config with payload:', payload);
       
-      const response = await fetch('http://localhost:5167/save-transcript-config', {
+      const response = await fetch(`${serverAddress}/save-transcript-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +225,7 @@ const Sidebar: React.FC = () => {
       meeting_id: itemId
     };
     
-    const response = await fetch('http://localhost:5167/delete-meeting', {
+    const response = await fetch(`${serverAddress}/delete-meeting`, {
       cache: 'no-store',
       method: 'POST',
       headers: {
@@ -314,13 +316,34 @@ const Sidebar: React.FC = () => {
         >
           <StickyNote className="w-5 h-5 text-gray-600" />
         </button>
-        <button
+        {/* <button
           onClick={() => setShowModelSettings(true)}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
           title="Settings"
         >
           <Settings className="w-5 h-5 text-gray-600" />
-        </button>
+        </button> */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5 text-gray-600" />
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <SettingTabs
+              modelConfig={modelConfig}
+              setModelConfig={setModelConfig}
+              onSave={handleSaveModelConfig}
+              transcriptModelConfig={transcriptModelConfig}
+              setTranscriptModelConfig={setTranscriptModelConfig}
+              onSaveTranscript={handleSaveTranscriptConfig}
+              setSaveSuccess={setSettingsSaveSuccess}
+            />
+          </DialogContent>
+        </Dialog>
         {/* <button
           onClick={() => {
             if (isCollapsed) toggleCollapse();
@@ -545,7 +568,7 @@ const Sidebar: React.FC = () => {
               </button>
         
               <Dialog>
-                <DialogTrigger className='w-full'>
+                <DialogTrigger asChild>
                   <button
                   onClick={() => setShowModelSettings(true)}
                   className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-200 rounded-lg transition-colors shadow-sm"

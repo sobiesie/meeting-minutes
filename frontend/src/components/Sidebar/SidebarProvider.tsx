@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { load } from '@tauri-apps/plugin-store';
 
 
 interface SidebarItem {
@@ -40,6 +41,8 @@ interface SidebarContextType {
   searchTranscripts: (query: string) => Promise<void>;
   searchResults: TranscriptSearchResult[];
   isSearching: boolean;
+  setServerAddress: (address: string) => void;
+  serverAddress: string;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -61,6 +64,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isRecording, setIsRecording] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [serverAddress, setServerAddress] = useState('');
+
+
 
   const pathname = usePathname();
   const router = useRouter();
@@ -68,7 +74,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchMeetings = async () => {
       try {
-        const response = await fetch('http://localhost:5167/get-meetings', {
+        const store = await load('store.json', { autoSave: false });
+        let serverAddress = await store.get('appServerUrl') as string | null;
+        if (!serverAddress) {
+          await store.set('appServerUrl', 'http://localhost:5167');
+          serverAddress = await store.get('appServerUrl') as string;
+          await store.save();
+        }
+        setServerAddress(serverAddress);
+        const response = await fetch(`${serverAddress}/get-meetings`, {
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -142,7 +156,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     
     try {
       setIsSearching(true);
-      const response = await fetch('http://localhost:5167/search-transcripts', {
+      const response = await fetch(`${serverAddress}/search-transcripts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +194,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       handleRecordingToggle,
       searchTranscripts,
       searchResults,
-      isSearching
+      isSearching,
+      setServerAddress,
+      serverAddress
     }}>
       {children}
     </SidebarContext.Provider>

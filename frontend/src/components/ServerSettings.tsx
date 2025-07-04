@@ -8,6 +8,7 @@ import { Form } from "./ui/form";
 import { Button } from "./ui/button";
 import { load } from '@tauri-apps/plugin-store';
 import { useEffect } from 'react';
+import { useSidebar } from "./Sidebar/SidebarProvider";
 
 
 const serverSettingsSchema = z.object({
@@ -20,6 +21,7 @@ type ServerSettings = z.infer<typeof serverSettingsSchema>;
 export function ServerSettings(
     {setSaveSuccess}: {setSaveSuccess: (success: boolean) => void}
 ) {
+    const { serverAddress, setServerAddress } = useSidebar();
     const form = useForm<ServerSettings>({
         resolver: zodResolver(serverSettingsSchema),
         defaultValues: {
@@ -48,6 +50,7 @@ export function ServerSettings(
         await store.set('transcriptServerUrl', data.transcriptServerUrl);
         await store.save();
         setSaveSuccess(true);
+        setServerAddress(data.appServerUrl);
         console.log(data);
         } catch (error) {
             setSaveSuccess(false);

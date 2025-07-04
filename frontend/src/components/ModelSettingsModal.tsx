@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSidebar } from './Sidebar/SidebarProvider';
 
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openai';
@@ -31,12 +32,12 @@ export function ModelSettingsModal({
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
   const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
-
+  const { serverAddress } = useSidebar();
   useEffect(() => {
     // if (showModelSettings) {
       const fetchModelConfig = async () => {
         try {
-          const response = await fetch('http://localhost:5167/get-model-config');
+          const response = await fetch(`${serverAddress}/get-model-config`);
           const data = await response.json();
           if (data.provider !== null) {
             setModelConfig(data);
@@ -53,7 +54,7 @@ export function ModelSettingsModal({
 
   const fetchApiKey = async (provider: string) => {
     try {
-      const response = await fetch('http://localhost:5167/get-api-key', {
+      const response = await fetch(`${serverAddress}/get-api-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

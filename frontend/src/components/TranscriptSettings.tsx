@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSidebar } from './Sidebar/SidebarProvider';
 
 
 export interface TranscriptModelProps {
@@ -18,11 +19,11 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [showApiKey, setShowApiKey] = useState<boolean>(false);
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
-
+    const { serverAddress } = useSidebar();
     useEffect(() => {
         const fetchTranscriptSettings = async () => {
             try {
-                const response = await fetch('http://localhost:5167/get-transcript-config');
+                const response = await fetch(`${serverAddress}/get-transcript-config`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -46,7 +47,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
 
     const fetchApiKey = async (provider: string) => {
         try {
-            const response = await fetch('http://localhost:5167/get-transcript-api-key', {
+            const response = await fetch(`${serverAddress}/get-transcript-api-key`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

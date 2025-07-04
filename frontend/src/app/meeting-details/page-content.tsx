@@ -47,7 +47,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const [error, setError] = useState<string>('');
   const [meetings, setLocalMeetings] = useState<CurrentMeeting[]>([]);
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
-  const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
+  const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings , serverAddress} = useSidebar();
   
   // Keep local meetings state in sync with sidebar meetings
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   useEffect(() => {
     const fetchModelConfig = async () => {
       try {
-        const response = await fetch('http://localhost:5167/get-model-config');
+        const response = await fetch(`${serverAddress}/get-model-config`);
         const data = await response.json();
         if (data.provider !== null) {
           setModelConfig(data);
@@ -77,7 +77,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   useEffect(() => {
     const fetchTranscriptSettings = async () => {
       try {
-        const response = await fetch('http://localhost:5167/get-transcript-config');
+        const response = await fetch(`${serverAddress}/get-transcript-config`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -123,7 +123,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch('http://localhost:5167/process-transcript', {
+      const response = await fetch(`${serverAddress}/process-transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,7 +151,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
 
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
@@ -264,7 +264,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       };
       console.log('Saving meeting summary with payload:', payload);
       
-      const response = await fetch('http://localhost:5167/save-meeting-summary', {
+      const response = await fetch(`${serverAddress}/save-meeting-summary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -338,7 +338,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch('http://localhost:5167/process-transcript', {
+      const response = await fetch(`${serverAddress}/process-transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -363,7 +363,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
             console.error('Get summary failed:', errorData);
@@ -478,7 +478,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       };
       console.log('Saving meeting title with payload:', payload);
       
-      const response = await fetch('http://localhost:5167/save-meeting-title', {
+      const response = await fetch(`${serverAddress}/save-meeting-title`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -557,7 +557,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       };
       console.log('Saving model config with payload:', payload);
       
-      const response = await fetch('http://localhost:5167/save-model-config', {
+      const response = await fetch(`${serverAddress}/save-model-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -575,8 +575,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       const responseData = await response.json();
       console.log('Save model config success:', responseData);
       setSettingsSaveSuccess(true);
-
       setModelConfig(payload);
+      
     } catch (error) {
       console.error('Failed to save model config:', error);
       setSettingsSaveSuccess(false);
@@ -598,7 +598,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       };
       console.log('Saving transcript config with payload:', payload);
       
-      const response = await fetch('http://localhost:5167/save-transcript-config', {
+      const response = await fetch(`${serverAddress}/save-transcript-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

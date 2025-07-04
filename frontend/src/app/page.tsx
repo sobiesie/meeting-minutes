@@ -65,7 +65,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
 
-  const { setCurrentMeeting, setMeetings, meetings, isMeetingActive, setIsMeetingActive, setIsRecording: setSidebarIsRecording } = useSidebar();
+  const { setCurrentMeeting, setMeetings, meetings, isMeetingActive, setIsMeetingActive, setIsRecording: setSidebarIsRecording , serverAddress} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
 
@@ -386,7 +386,7 @@ export default function Home() {
       // Save to SQLite
       if (isCallApi) {
         console.log('Saving transcript to database...', transcripts);
-        const response = await fetch('http://localhost:5167/save-transcript', {
+        const response = await fetch(`${serverAddress}/save-transcript`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -462,7 +462,7 @@ export default function Home() {
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch('http://localhost:5167/process-transcript', {
+      const response = await fetch(`${serverAddress}/process-transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -490,7 +490,7 @@ export default function Home() {
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
           
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
@@ -664,7 +664,7 @@ export default function Home() {
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch('http://localhost:5167/process-transcript', {
+      const response = await fetch(`${serverAddress}/process-transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -688,7 +688,7 @@ export default function Home() {
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
+          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
           
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();

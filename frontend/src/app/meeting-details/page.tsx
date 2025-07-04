@@ -21,7 +21,7 @@ const sampleSummary: Summary = {
 };
 
 export default function MeetingDetails() {
-  const { currentMeeting } = useSidebar();
+  const { currentMeeting , serverAddress} = useSidebar();
   const router = useRouter();
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
   const [meetingSummary, setMeetingSummary] = useState<Summary|null>(null);
@@ -42,7 +42,7 @@ export default function MeetingDetails() {
 
     const fetchMeetingDetails = async () => {
       try {
-        const response = await fetch(`http://localhost:5167/get-meeting/${currentMeeting.id}`, {
+        const response = await fetch(`${serverAddress}/get-meeting/${currentMeeting.id}`, {
           cache: 'no-store',
         });
         if (!response.ok) {
@@ -59,7 +59,7 @@ export default function MeetingDetails() {
 
     const fetchMeetingSummary = async () => {
       try {
-        const summaryResponse = await fetch(`http://localhost:5167/get-summary/${currentMeeting.id}`, {
+        const summaryResponse = await fetch(`${serverAddress}/get-summary/${currentMeeting.id}`, {
           cache: 'no-store',
         });
         if (!summaryResponse.ok) {
