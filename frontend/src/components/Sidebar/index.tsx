@@ -15,7 +15,9 @@ import {
   Dialog,
   DialogContent,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
+import { MessageToast } from '../MessageToast';
 
 interface SidebarItem {
   id: string;
@@ -54,6 +56,7 @@ const Sidebar: React.FC = () => {
     provider: 'localWhisper',
     model: 'large-v3',
   });
+  const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
   
   // Ensure 'meetings' folder is always expanded
   useEffect(() => {
@@ -63,6 +66,16 @@ const Sidebar: React.FC = () => {
       setExpandedFolders(newExpanded);
     }
   }, [expandedFolders]);
+
+  useEffect(() => {
+    if (settingsSaveSuccess !== null) {
+      const timer = setTimeout(() => {
+        setSettingsSaveSuccess(null);
+      }, 3000);
+    }
+  }, [settingsSaveSuccess]);
+
+
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
   
   // Handle model config save
@@ -82,8 +95,10 @@ const Sidebar: React.FC = () => {
 
       setModelConfig(config);
       console.log('Model config saved successfully');
+      setSettingsSaveSuccess(true);
     } catch (error) {
       console.error('Error saving model config:', error);
+      setSettingsSaveSuccess(false);
     }
   };
 
@@ -114,9 +129,10 @@ const Sidebar: React.FC = () => {
 
       const responseData = await response.json();
       console.log('Save transcript config success:', responseData);
+      setSettingsSaveSuccess(true);
     } catch (error) {
       console.error('Failed to save transcript config:', error);
-      
+      setSettingsSaveSuccess(false);
     }
   };
   
@@ -527,15 +543,7 @@ const Sidebar: React.FC = () => {
                   </>
                 )}
               </button>
-              {/* <div className="mt-2">
-                <button
-                  onClick={() => setShowModelSettings(true)}
-                  className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-200 rounded-lg transition-colors shadow-sm"
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    <span>Settings</span>
-                  </button>
-              </div> */}
+        
               <Dialog>
                 <DialogTrigger className='w-full'>
                   <button
@@ -554,7 +562,13 @@ const Sidebar: React.FC = () => {
                     transcriptModelConfig={transcriptModelConfig}
                     setTranscriptModelConfig={setTranscriptModelConfig}
                     onSaveTranscript={handleSaveTranscriptConfig}
+                    setSaveSuccess={setSettingsSaveSuccess}
                   />
+                  <DialogFooter>
+                    {settingsSaveSuccess !== null && (
+                      <MessageToast message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} type={settingsSaveSuccess ? 'success' : 'error'} />
+                    )}
+                  </DialogFooter>
 
                 </DialogContent>
 
@@ -574,16 +588,7 @@ const Sidebar: React.FC = () => {
         onCancel={() => setDeleteModalState({ isOpen: false, itemId: null })}
       />
 
-      {/* Model Settings Modal */}
-      {/* {showModelSettings && (
-        <ModelSettingsModal
-          showModelSettings={showModelSettings}
-          setShowModelSettings={setShowModelSettings}
-          modelConfig={modelConfig}
-          setModelConfig={setModelConfig}
-          onSave={handleSaveModelConfig}
-        />
-      )} */}
+      
     </div>
   );
 };
