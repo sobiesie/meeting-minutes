@@ -6,6 +6,8 @@ import * as z from 'zod';
 import { FormInputItem } from "./molecules/form-components/form-input-item";
 import { Form } from "./ui/form";
 import { Button } from "./ui/button";
+import { load } from '@tauri-apps/plugin-store';
+import { useEffect } from 'react';
 
 
 const serverSettingsSchema = z.object({
@@ -23,13 +25,33 @@ export function ServerSettings() {
             transcriptServerUrl: '',
         },
     });
-    const onSubmit = (data: ServerSettings) => {
+    useEffect(() => {
+        const loadSettings = async () => {
+            const store = await load('store.json', { autoSave: false });
+            const appServerUrl = await store.get('appServerUrl') as string | null;
+            const transcriptServerUrl = await store.get('transcriptServerUrl') as string | null;
+            if (appServerUrl) {
+                form.setValue('appServerUrl', appServerUrl);
+            }
+            if (transcriptServerUrl) {
+                form.setValue('transcriptServerUrl', transcriptServerUrl);
+            }
+        };
+        loadSettings();
+    }, []);
+    const onSubmit = async (data: ServerSettings) => {
+        const store = await load('store.json', { autoSave: false });
+        await store.set('appServerUrl', data.appServerUrl);
+        await store.set('transcriptServerUrl', data.transcriptServerUrl);
+        await store.save();
         console.log(data);
     };
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <h3 className="text-lg font-semibold text-gray-900">Server Settings</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Server Settings</h3>
+            <form onSubmit={form.handleSubmit(onSubmit)} >
+                
+                <div className="space-y-8 mt-4">
                 <FormInputItem 
                     name="appServerUrl"
                     control={form.control}
@@ -44,7 +66,10 @@ export function ServerSettings() {
                     type="text"
                     placeholder="Enter transcript server URL"
                 />
-                <Button type="submit">Save</Button>
+                </div>
+                <div className="flex justify-end mt-6">
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">Save</Button>
+                </div>
             </form>
         </Form>
     );

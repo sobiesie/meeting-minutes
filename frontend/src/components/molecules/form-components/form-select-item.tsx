@@ -4,7 +4,7 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-} from '@/components/atoms-shadcnui/ui/form';
+} from '@/components/ui/form';
 import {
   Select,
   SelectTrigger,
@@ -13,7 +13,7 @@ import {
   SelectValue,
   SelectGroup,
   SelectLabel,
-} from '@/components/atoms-shadcnui/ui/select';
+} from '@/components/ui/select';
 import { Control } from 'react-hook-form'; // Import Control type
 type ISelectItemProps = {
   name: string;

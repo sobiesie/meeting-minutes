@@ -75,7 +75,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   useEffect(() => {
     const fetchTranscriptSettings = async () => {
       try {
-        const response = await fetch('http://localhost:5167/get-transcript-settings');
+        const response = await fetch('http://localhost:5167/get-transcript-config');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -684,8 +684,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                       </DialogTrigger>
                       <DialogContent>
                         <SettingTabs
-                          showModelSettings={showModelSettings}
-                          setShowModelSettings={setShowModelSettings}
                           modelConfig={modelConfig}
                           setModelConfig={setModelConfig}
                           onSave={handleSaveModelConfig}

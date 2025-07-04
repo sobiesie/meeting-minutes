@@ -422,7 +422,14 @@ class DatabaseManager:
             row = await cursor.fetchone()
             return row[0] if row and row[0] else ""
 
-    async def save_transcript_settings(self, provider: str, model: str):
+    async def get_transcript_config(self):
+        """Get the current transcript configuration"""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("SELECT provider, model FROM transcript_settings")
+            row = await cursor.fetchone()
+            return dict(zip([col[0] for col in cursor.description], row)) if row else None
+
+    async def save_transcript_config(self, provider: str, model: str):
         """Save the transcript settings"""
         async with self._get_connection() as conn:
             # Check if the configuration already exists

@@ -87,6 +87,11 @@ class SaveModelConfigRequest(BaseModel):
     whisperModel: str
     apiKey: Optional[str] = None
 
+class SaveTranscriptConfigRequest(BaseModel):
+    provider: str
+    model: str
+    apiKey: Optional[str] = None
+
 class TranscriptRequest(BaseModel):
     """Request model for transcript text, updated with meeting_id"""
     text: str
@@ -506,6 +511,23 @@ async def save_model_config(request: SaveModelConfigRequest):
         await db.save_api_key(request.apiKey, request.provider)
     return {"status": "success", "message": "Model configuration saved successfully"}  
 
+@app.get("/get-transcript-config")
+async def get_transcript_config():
+    """Get the current transcript configuration"""
+    transcript_config = await db.get_transcript_config()
+    transcript_api_key = await db.get_transcript_api_key(transcript_config["provider"])
+    if transcript_api_key != None:
+        transcript_config["apiKey"] = transcript_api_key
+    return transcript_config
+
+@app.post("/save-transcript-config")
+async def save_transcript_config(request: SaveTranscriptConfigRequest):
+    """Save the transcript configuration"""
+    await db.save_transcript_config(request.provider, request.model)
+    if request.apiKey != None:
+        await db.save_transcript_api_key(request.apiKey, request.provider)
+    return {"status": "success", "message": "Transcript configuration saved successfully"}
+
 class GetApiKeyRequest(BaseModel):
     provider: str
 
@@ -513,6 +535,14 @@ class GetApiKeyRequest(BaseModel):
 async def get_api_key(request: GetApiKeyRequest):
     try:
         api_key = await db.get_api_key(request.provider)
+        return {"api_key": api_key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get-transcript-api-key")
+async def get_transcript_api_key(request: GetApiKeyRequest):
+    try:
+        api_key = await db.get_transcript_api_key(request.provider)
         return {"api_key": api_key}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

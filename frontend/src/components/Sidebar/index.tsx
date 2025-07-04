@@ -6,7 +6,16 @@ import { useRouter } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { ConfirmationModal } from '../ConfirmationModel/confirmation-modal';
-import { ModelSettingsModal, ModelConfig } from '@/components/ModelSettingsModal';
+import {  ModelConfig } from '@/components/ModelSettingsModal';
+import { SettingTabs } from '../SettingTabs';
+import { TranscriptModelProps } from '@/components/TranscriptSettings';
+
+
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface SidebarItem {
   id: string;
@@ -41,6 +50,10 @@ const Sidebar: React.FC = () => {
     whisperModel: 'large-v3',
     apiKey: null
   });
+  const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
+    provider: 'localWhisper',
+    model: 'large-v3',
+  });
   
   // Ensure 'meetings' folder is always expanded
   useEffect(() => {
@@ -71,6 +84,39 @@ const Sidebar: React.FC = () => {
       console.log('Model config saved successfully');
     } catch (error) {
       console.error('Error saving model config:', error);
+    }
+  };
+
+  const handleSaveTranscriptConfig = async (updatedConfig?: TranscriptModelProps) => {
+    try {
+      const configToSave = updatedConfig || transcriptModelConfig;
+      const payload = {
+        provider: configToSave.provider,
+        model: configToSave.model,
+        apiKey: configToSave.apiKey ?? null
+      };
+      console.log('Saving transcript config with payload:', payload);
+      
+      const response = await fetch('http://localhost:5167/save-transcript-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Save transcript config failed:', errorData);
+        console.error('Response status:', response.status);
+        throw new Error(errorData.error || 'Failed to save transcript config');
+      }
+
+      const responseData = await response.json();
+      console.log('Save transcript config success:', responseData);
+    } catch (error) {
+      console.error('Failed to save transcript config:', error);
+      
     }
   };
   
@@ -481,7 +527,7 @@ const Sidebar: React.FC = () => {
                   </>
                 )}
               </button>
-              <div className="mt-2">
+              {/* <div className="mt-2">
                 <button
                   onClick={() => setShowModelSettings(true)}
                   className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-200 rounded-lg transition-colors shadow-sm"
@@ -489,7 +535,30 @@ const Sidebar: React.FC = () => {
                     <Settings className="w-4 h-4 mr-2" />
                     <span>Settings</span>
                   </button>
-              </div>
+              </div> */}
+              <Dialog>
+                <DialogTrigger className='w-full'>
+                  <button
+                  onClick={() => setShowModelSettings(true)}
+                  className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-200 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    <span>Settings</span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent>
+                  <SettingTabs
+                    modelConfig={modelConfig}
+                    setModelConfig={setModelConfig}
+                    onSave={handleSaveModelConfig}
+                    transcriptModelConfig={transcriptModelConfig}
+                    setTranscriptModelConfig={setTranscriptModelConfig}
+                    onSaveTranscript={handleSaveTranscriptConfig}
+                  />
+
+                </DialogContent>
+
+              </Dialog>
               <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
               v0.0.5 - Pre Release
             </div>
@@ -506,7 +575,7 @@ const Sidebar: React.FC = () => {
       />
 
       {/* Model Settings Modal */}
-      {showModelSettings && (
+      {/* {showModelSettings && (
         <ModelSettingsModal
           showModelSettings={showModelSettings}
           setShowModelSettings={setShowModelSettings}
@@ -514,7 +583,7 @@ const Sidebar: React.FC = () => {
           setModelConfig={setModelConfig}
           onSave={handleSaveModelConfig}
         />
-      )}
+      )} */}
     </div>
   );
 };

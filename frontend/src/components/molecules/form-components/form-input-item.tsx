@@ -4,11 +4,11 @@ import {
   FormItem,
   FormMessage,
   FormLabel,
-} from '@/components/atoms-shadcnui/ui/form';
-import { Input } from '@/components/atoms-shadcnui/ui/input';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import { Eye, EyeOff } from 'lucide-react';
 import { Control } from 'react-hook-form'; // Import Control type
-import { Textarea } from '@/components/atoms-shadcnui/ui/textarea';
+import { Textarea } from '@/components/ui/textarea';
 
 type IInpuItemProps = {
   name: string;

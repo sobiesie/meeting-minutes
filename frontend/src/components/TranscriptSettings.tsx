@@ -14,7 +14,6 @@ export interface TranscriptSettingsProps {
 }
 
 export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelConfig, onSave }: TranscriptSettingsProps) {
-    const [error, setError] = useState<string>('');
     const [apiKey, setApiKey] = useState<string | null>(transcriptModelConfig.apiKey || null);
     const [showApiKey, setShowApiKey] = useState<boolean>(false);
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
@@ -23,7 +22,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     useEffect(() => {
         const fetchTranscriptSettings = async () => {
             try {
-                const response = await fetch('http://localhost:5167/get-transcript-settings');
+                const response = await fetch('http://localhost:5167/get-transcript-config');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
