@@ -43,6 +43,8 @@ interface SidebarContextType {
   isSearching: boolean;
   setServerAddress: (address: string) => void;
   serverAddress: string;
+  transcriptServerAddress: string;
+  setTranscriptServerAddress: (address: string) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -65,7 +67,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [serverAddress, setServerAddress] = useState('');
-
+  const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
 
 
   const pathname = usePathname();
@@ -76,12 +78,19 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       try {
         const store = await load('store.json', { autoSave: false });
         let serverAddress = await store.get('appServerUrl') as string | null;
+        let transcriptServerAddress = await store.get('transcriptServerUrl') as string | null;
         if (!serverAddress) {
           await store.set('appServerUrl', 'http://localhost:5167');
           serverAddress = await store.get('appServerUrl') as string;
           await store.save();
         }
+        if (!transcriptServerAddress) {
+          await store.set('transcriptServerUrl', 'http://127.0.0.1:8178/stream');
+          transcriptServerAddress = await store.get('transcriptServerUrl') as string;
+          await store.save();
+        }
         setServerAddress(serverAddress);
+        setTranscriptServerAddress(transcriptServerAddress);
         const response = await fetch(`${serverAddress}/get-meetings`, {
           cache: 'no-store',
           headers: {
@@ -196,7 +205,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       searchResults,
       isSearching,
       setServerAddress,
-      serverAddress
+      serverAddress,
+      transcriptServerAddress,
+      setTranscriptServerAddress
     }}>
       {children}
     </SidebarContext.Provider>

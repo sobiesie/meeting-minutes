@@ -13,6 +13,7 @@ use audio::{
 };
 use ollama::{OllamaModel};
 use tauri::{Runtime, AppHandle, Emitter};
+use tauri_plugin_store::StoreExt;
 use log::{info as log_info, error as log_error, debug as log_debug};
 use reqwest::multipart::{Form, Part};
 
@@ -157,7 +158,7 @@ impl TranscriptAccumulator {
     }
 }
 
-async fn send_audio_chunk(chunk: Vec<f32>, client: &reqwest::Client) -> Result<TranscriptResponse, String> {
+async fn send_audio_chunk(chunk: Vec<f32>, client: &reqwest::Client, stream_url: &str) -> Result<TranscriptResponse, String> {
     log_debug!("Preparing to send audio chunk of size: {}", chunk.len());
     
     // Convert f32 samples to bytes
@@ -189,7 +190,7 @@ async fn send_audio_chunk(chunk: Vec<f32>, client: &reqwest::Client) -> Result<T
             .unwrap();
         let form = Form::new().part("audio", part);
 
-        match client.post("http://127.0.0.1:8178/stream")
+        match client.post(stream_url)
             .multipart(form)
             .send()
             .await {
@@ -280,6 +281,14 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     // Create HTTP client for transcription
     let client = reqwest::Client::new();
     
+    // Get the transcript server URL from the store
+    let store = app.store("store.json").map_err(|e| e.to_string())?;
+    let stream_url = match store.get("transcriptServerUrl") {
+        Some(url) => url.as_str().unwrap_or("http://127.0.0.1:8178/stream").to_string(),
+        None => "http://127.0.0.1:8178/stream".to_string(),
+    };
+    log_info!("Using stream URL: {}", stream_url);
+
     // Start transcription task
     let app_handle = app.clone();
     
@@ -523,7 +532,7 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
                 };
 
                 // Send chunk for transcription
-                match send_audio_chunk(whisper_samples, &client).await {
+                match send_audio_chunk(whisper_samples, &client, &stream_url).await {
                     Ok(response) => {
                         log_info!("Received {} transcript segments", response.segments.len());
                         for segment in response.segments {

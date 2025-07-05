@@ -21,7 +21,7 @@ type ServerSettings = z.infer<typeof serverSettingsSchema>;
 export function ServerSettings(
     {setSaveSuccess}: {setSaveSuccess: (success: boolean) => void}
 ) {
-    const { serverAddress, setServerAddress } = useSidebar();
+    const { serverAddress, setServerAddress, transcriptServerAddress, setTranscriptServerAddress } = useSidebar();
     const form = useForm<ServerSettings>({
         resolver: zodResolver(serverSettingsSchema),
         defaultValues: {
@@ -31,15 +31,15 @@ export function ServerSettings(
     });
     useEffect(() => {
         const loadSettings = async () => {
-            const store = await load('store.json', { autoSave: false });
-            const appServerUrl = await store.get('appServerUrl') as string | null;
-            const transcriptServerUrl = await store.get('transcriptServerUrl') as string | null;
-            if (appServerUrl) {
-                form.setValue('appServerUrl', appServerUrl);
-            }
-            if (transcriptServerUrl) {
-                form.setValue('transcriptServerUrl', transcriptServerUrl);
-            }
+            // const store = await load('store.json', { autoSave: false });
+            // const appServerUrl = await store.get('appServerUrl') as string | null;
+            // const transcriptServerUrl = await store.get('transcriptServerUrl') as string | null;
+            
+                form.setValue('appServerUrl', serverAddress);
+    
+            
+                form.setValue('transcriptServerUrl', transcriptServerAddress);
+            
         };
         loadSettings();
     }, []);
@@ -51,6 +51,7 @@ export function ServerSettings(
         await store.save();
         setSaveSuccess(true);
         setServerAddress(data.appServerUrl);
+        setTranscriptServerAddress(data.transcriptServerUrl);
         console.log(data);
         } catch (error) {
             setSaveSuccess(false);
