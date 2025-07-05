@@ -24,6 +24,7 @@ static mut MIC_STREAM: Option<Arc<AudioStream>> = None;
 static mut SYSTEM_STREAM: Option<Arc<AudioStream>> = None;
 static mut IS_RUNNING: Option<Arc<AtomicBool>> = None;
 static mut RECORDING_START_TIME: Option<std::time::Instant> = None;
+static mut TRANSCRIPTION_TASK: Option<tokio::task::JoinHandle<()>> = None;
 
 // Audio configuration constants
 const CHUNK_DURATION_MS: u32 = 30000; // 30 seconds per chunk for better sentence processing
@@ -224,6 +225,16 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
         return Err("Recording already in progress".to_string());
     }
 
+    // Stop any existing transcription task first
+    unsafe {
+        if let Some(task) = TRANSCRIPTION_TASK.take() {
+            log_info!("Stopping existing transcription task...");
+            task.abort();
+            // Give it a moment to clean up
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
     // Initialize recording flag and buffers
     RECORDING_FLAG.store(true, Ordering::SeqCst);
     log_info!("Recording flag set to true");
@@ -326,245 +337,216 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let sample_rate = device_config.sample_rate().0;
     let channels = device_config.channels();
     
-    tokio::spawn(async move {
-        let chunk_samples = (WHISPER_SAMPLE_RATE as f32 * (CHUNK_DURATION_MS as f32 / 1000.0)) as usize;
-        let min_samples = (WHISPER_SAMPLE_RATE as f32 * (MIN_CHUNK_DURATION_MS as f32 / 1000.0)) as usize;
-        let mut current_chunk: Vec<f32> = Vec::with_capacity(chunk_samples);
-        let mut last_chunk_time = std::time::Instant::now();
-        
-        log_info!("Mic config: {} Hz, {} channels", sample_rate, channels);
-        
-        while is_running.load(Ordering::SeqCst) {
-            // Check for timeout on current sentence
-            if let Some(update) = accumulator.check_timeout() {
-                if let Err(e) = app_handle.emit("transcript-update", update) {
-                    log_error!("Failed to send timeout transcript update: {}", e);
-                }
-            }
-
-            // Collect audio samples
-            let mut new_samples = Vec::new();
-            let mut mic_samples = Vec::new();
-            let mut system_samples = Vec::new();
+    // Store the transcription task handle globally
+    unsafe {
+        TRANSCRIPTION_TASK = Some(tokio::spawn(async move {
+            log_info!("Transcription task started");
+            let chunk_samples = (WHISPER_SAMPLE_RATE as f32 * (CHUNK_DURATION_MS as f32 / 1000.0)) as usize;
+            let min_samples = (WHISPER_SAMPLE_RATE as f32 * (MIN_CHUNK_DURATION_MS as f32 / 1000.0)) as usize;
+            let mut current_chunk: Vec<f32> = Vec::with_capacity(chunk_samples);
+            let mut last_chunk_time = std::time::Instant::now();
             
-            // Get microphone samples
-            let mut got_mic_samples = false;
-            while let Ok(chunk) = mic_receiver_clone.try_recv() {
-                got_mic_samples = true;
-                log_debug!("Received {} mic samples", chunk.len());
-                let chunk_clone = chunk.clone();
-                mic_samples.extend(chunk);
-                
-                // Store in global buffer
-                unsafe {
-                    if let Some(buffer) = &MIC_BUFFER {
-                        if let Ok(mut guard) = buffer.lock() {
-                            guard.extend(chunk_clone);
-                        }
+            log_info!("Mic config: {} Hz, {} channels", sample_rate, channels);
+            
+            // Use the global IS_RUNNING flag instead of local is_running
+            while unsafe { 
+                if let Some(is_running) = &IS_RUNNING {
+                    let running = is_running.load(Ordering::SeqCst);
+                    if !running {
+                        log_debug!("Transcription task: IS_RUNNING is false, exiting loop");
                     }
-                }
-            }
-            // If we didn't get any samples, try to resubscribe to clear any backlog
-            if !got_mic_samples {
-                log_debug!("No mic samples received, resubscribing to clear channel");
-                mic_receiver_clone = mic_stream.subscribe().await;
-            }
-            
-            // Get system audio samples
-            let mut got_system_samples = false;
-            while let Ok(chunk) = system_receiver.try_recv() {
-                got_system_samples = true;
-                log_debug!("Received {} system samples", chunk.len());
-                let chunk_clone = chunk.clone();
-                system_samples.extend(chunk);
-                
-                // Store in global buffer
-                unsafe {
-                    if let Some(buffer) = &SYSTEM_BUFFER {
-                        if let Ok(mut guard) = buffer.lock() {
-                            guard.extend(chunk_clone);
-                        }
-                    }
-                }
-            }
-            // If we didn't get any samples, try to resubscribe to clear any backlog
-            if !got_system_samples {
-                log_debug!("No system samples received, resubscribing to clear channel");
-                system_receiver = system_stream.subscribe().await;
-            }
-            
-            // Mix samples with debug info
-            let max_len = mic_samples.len().max(system_samples.len());
-            for i in 0..max_len {
-                let mic_sample = if i < mic_samples.len() { mic_samples[i] } else { 0.0 };
-                let system_sample = if i < system_samples.len() { system_samples[i] } else { 0.0 };
-                // Increase mic sensitivity by giving it more weight in the mix (80% mic, 20% system)
-                new_samples.push((mic_sample * 0.7) + (system_sample * 0.3));
-            }
-            
-            log_debug!("Mixed {} samples", new_samples.len());
-            
-            // Add samples to current chunk
-            for sample in new_samples {
-                current_chunk.push(sample);
-            }
-            
-            // Check if we should send the chunk based on size or time
-            let should_send = current_chunk.len() >= chunk_samples || 
-                            (current_chunk.len() >= min_samples && 
-                             last_chunk_time.elapsed() >= Duration::from_millis(CHUNK_DURATION_MS as u64));
-            
-            if should_send {
-                log_info!("Should send chunk with {} samples", current_chunk.len());
-                let chunk_to_send = current_chunk.clone();
-                current_chunk.clear();
-                last_chunk_time = std::time::Instant::now();
-                
-                // Save debug chunks
-                let chunk_num = chunk_counter_clone.fetch_add(1, Ordering::SeqCst);
-                log_info!("Processing chunk {}", chunk_num);
-                
-                // // Save mic chunk
-                // if !mic_samples.is_empty() {
-                //     let mic_chunk_path = debug_dir.join(format!("chunk_{}_mic.wav", chunk_num));
-                //     log_info!("Saving mic chunk to {:?}", mic_chunk_path);
-                //     let mic_bytes: Vec<u8> = mic_samples.iter()
-                //         .flat_map(|&sample| {
-                //             let clamped = sample.max(-1.0).min(1.0);
-                //             clamped.to_le_bytes().to_vec()
-                //         })
-                //         .collect();
-                //     if let Err(e) = encode_single_audio(
-                //         &mic_bytes,
-                //         WAV_SAMPLE_RATE,
-                //         1, // Mono for mic
-                //         &mic_chunk_path,
-                //     ) {
-                //         log_error!("Failed to save mic chunk {}: {}", chunk_num, e);
-                //     } else {
-                //         log_info!("Successfully saved mic chunk {} with {} samples", chunk_num, mic_samples.len());
-                //     }
-                // } else {
-                //     log_info!("No mic samples to save for chunk {}", chunk_num);
-                // }
-
-                // Save system chunk
-                // if !system_samples.is_empty() {
-                //     let system_chunk_path = debug_dir.join(format!("chunk_{}_system.wav", chunk_num));
-                //     log_info!("Saving system chunk to {:?}", system_chunk_path);
-                //     let system_bytes: Vec<u8> = system_samples.iter()
-                //         .flat_map(|&sample| {
-                //             let clamped = sample.max(-1.0).min(1.0);
-                //             clamped.to_le_bytes().to_vec()
-                //         })
-                //         .collect();
-                //     if let Err(e) = encode_single_audio(
-                //         &system_bytes,
-                //         WAV_SAMPLE_RATE,
-                //         2, // Stereo for system
-                //         &system_chunk_path,
-                //     ) {
-                //         log_error!("Failed to save system chunk {}: {}", chunk_num, e);
-                //     } else {
-                //         log_info!("Successfully saved system chunk {} with {} samples", chunk_num, system_samples.len());
-                //     }
-                // } else {
-                //     log_info!("No system samples to save for chunk {}", chunk_num);
-                // }
-                
-                // Save mixed chunk
-                // if !chunk_to_send.is_empty() {
-                //     let mixed_chunk_path = debug_dir.join(format!("chunk_{}_mixed.wav", chunk_num));
-                //     log_info!("Saving mixed chunk to {:?}", mixed_chunk_path);
-                //     let mixed_bytes: Vec<u8> = chunk_to_send.iter()
-                //         .flat_map(|&sample| {
-                //             let clamped = sample.max(-1.0).min(1.0);
-                //             clamped.to_le_bytes().to_vec()
-                //         })
-                //         .collect();
-                //     match encode_single_audio(
-                //         &mixed_bytes,
-                //         WAV_SAMPLE_RATE,
-                //         WAV_CHANNELS,
-                //         &mixed_chunk_path,
-                //     ) {
-                //         Ok(_) => {
-                //             log_info!("Successfully saved mixed chunk {} with {} samples", chunk_num, chunk_to_send.len());
-                //         }
-                //         Err(e) => {
-                //             // Check if it's a broken pipe error
-                //             if e.to_string().contains("Broken pipe") {
-                //                 log_debug!("Broken pipe while saving chunk {} - this is expected during cleanup", chunk_num);
-                //             } else {
-                //                 log_error!("Failed to save mixed chunk {}: {}", chunk_num, e);
-                //             }
-                //         }
-                //     }
-                // } else {
-                //     log_info!("No mixed samples to save for chunk {}", chunk_num);
-                // }
-                
-                // Keep only last 10 chunks
-                // if chunk_num > 10 {
-                //     if let Ok(entries) = fs::read_dir(&debug_dir) {
-                //         for entry in entries.flatten() {
-                //             if let Some(name) = entry.file_name().to_str() {
-                //                 if name.starts_with("chunk_") && 
-                //                    name.ends_with(".wav") && 
-                //                    !name.contains(&format!("chunk_{}", chunk_num)) {
-                //                     let _ = fs::remove_file(entry.path());
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
-                
-                // Process chunk for Whisper API
-                let whisper_samples = if sample_rate != WHISPER_SAMPLE_RATE {
-                    log_debug!("Resampling audio from {} to {}", sample_rate, WHISPER_SAMPLE_RATE);
-                    resample_audio(
-                        &chunk_to_send,
-                        sample_rate,
-                        WHISPER_SAMPLE_RATE,
-                    )
+                    running
                 } else {
-                    chunk_to_send
-                };
+                    log_debug!("Transcription task: IS_RUNNING is None, exiting loop");
+                    false
+                }
+            } {
+                // Check for timeout on current sentence
+                if let Some(update) = accumulator.check_timeout() {
+                    if let Err(e) = app_handle.emit("transcript-update", update) {
+                        log_error!("Failed to send timeout transcript update: {}", e);
+                    }
+                }
 
-                // Send chunk for transcription
-                match send_audio_chunk(whisper_samples, &client, &stream_url).await {
-                    Ok(response) => {
-                        log_info!("Received {} transcript segments", response.segments.len());
-                        for segment in response.segments {
-                            log_info!("Processing segment: {} ({:.1}s - {:.1}s)", 
-                                     segment.text.trim(), segment.t0, segment.t1);
-                            // Add segment to accumulator and check for complete sentence
-                            if let Some(update) = accumulator.add_segment(&segment) {
-                                // Emit the update
-                                if let Err(e) = app_handle.emit("transcript-update", update) {
-                                    log_error!("Failed to emit transcript update: {}", e);
+                // Collect audio samples
+                let mut new_samples = Vec::new();
+                let mut mic_samples = Vec::new();
+                let mut system_samples = Vec::new();
+                
+                // Get microphone samples
+                let mut got_mic_samples = false;
+                while let Ok(chunk) = mic_receiver_clone.try_recv() {
+                    got_mic_samples = true;
+                    log_debug!("Received {} mic samples", chunk.len());
+                    let chunk_clone = chunk.clone();
+                    mic_samples.extend(chunk);
+                    
+                    // Store in global buffer
+                    unsafe {
+                        if let Some(buffer) = &MIC_BUFFER {
+                            if let Ok(mut guard) = buffer.lock() {
+                                guard.extend(chunk_clone);
+                            }
+                        }
+                    }
+                }
+                // If we didn't get any samples, try to resubscribe to clear any backlog
+                if !got_mic_samples {
+                    log_debug!("No mic samples received, resubscribing to clear channel");
+                    mic_receiver_clone = mic_stream.subscribe().await;
+                }
+                
+                // Get system audio samples
+                let mut got_system_samples = false;
+                while let Ok(chunk) = system_receiver.try_recv() {
+                    got_system_samples = true;
+                    log_debug!("Received {} system samples", chunk.len());
+                    let chunk_clone = chunk.clone();
+                    system_samples.extend(chunk);
+                    
+                    // Store in global buffer
+                    unsafe {
+                        if let Some(buffer) = &SYSTEM_BUFFER {
+                            if let Ok(mut guard) = buffer.lock() {
+                                guard.extend(chunk_clone);
+                            }
+                        }
+                    }
+                }
+                // If we didn't get any samples, try to resubscribe to clear any backlog
+                if !got_system_samples {
+                    log_debug!("No system samples received, resubscribing to clear channel");
+                    system_receiver = system_stream.subscribe().await;
+                }
+                
+                // Mix samples with debug info
+                let max_len = mic_samples.len().max(system_samples.len());
+                for i in 0..max_len {
+                    let mic_sample = if i < mic_samples.len() { mic_samples[i] } else { 0.0 };
+                    let system_sample = if i < system_samples.len() { system_samples[i] } else { 0.0 };
+                    // Increase mic sensitivity by giving it more weight in the mix (80% mic, 20% system)
+                    new_samples.push((mic_sample * 0.7) + (system_sample * 0.3));
+                }
+                
+                log_debug!("Mixed {} samples", new_samples.len());
+                
+                // Add samples to current chunk
+                for sample in new_samples {
+                    current_chunk.push(sample);
+                }
+                
+                // Check if we should send the chunk based on size or time
+                let should_send = current_chunk.len() >= chunk_samples || 
+                                (current_chunk.len() >= min_samples && 
+                                 last_chunk_time.elapsed() >= Duration::from_millis(CHUNK_DURATION_MS as u64));
+                
+                if should_send {
+                    log_info!("Should send chunk with {} samples", current_chunk.len());
+                    let chunk_to_send = current_chunk.clone();
+                    current_chunk.clear();
+                    last_chunk_time = std::time::Instant::now();
+                    
+                    // Save debug chunks
+                    let chunk_num = chunk_counter_clone.fetch_add(1, Ordering::SeqCst);
+                    log_info!("Processing chunk {}", chunk_num);
+                    
+                    // Process chunk for Whisper API
+                    let whisper_samples = if sample_rate != WHISPER_SAMPLE_RATE {
+                        log_debug!("Resampling audio from {} to {}", sample_rate, WHISPER_SAMPLE_RATE);
+                        resample_audio(
+                            &chunk_to_send,
+                            sample_rate,
+                            WHISPER_SAMPLE_RATE,
+                        )
+                    } else {
+                        chunk_to_send
+                    };
+
+                    // Send chunk for transcription
+                    match send_audio_chunk(whisper_samples, &client, &stream_url).await {
+                        Ok(response) => {
+                            log_info!("Received {} transcript segments", response.segments.len());
+                            for segment in response.segments {
+                                log_info!("Processing segment: {} ({:.1}s - {:.1}s)", 
+                                         segment.text.trim(), segment.t0, segment.t1);
+                                // Add segment to accumulator and check for complete sentence
+                                if let Some(update) = accumulator.add_segment(&segment) {
+                                    // Emit the update
+                                    if let Err(e) = app_handle.emit("transcript-update", update) {
+                                        log_error!("Failed to emit transcript update: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log_error!("Transcription error: {}", e);
+                            
+                            // Check if this is a repeated error (could indicate server is down)
+                            static mut ERROR_COUNT: u32 = 0;
+                            static mut LAST_ERROR_TIME: Option<std::time::Instant> = None;
+                            
+                            unsafe {
+                                let now = std::time::Instant::now();
+                                if let Some(last_time) = LAST_ERROR_TIME {
+                                    if now.duration_since(last_time).as_secs() < 30 {
+                                        // Error within 30 seconds, increment counter
+                                        ERROR_COUNT += 1;
+                                        log_info!("Incremented ERROR_COUNT: {}", ERROR_COUNT);
+                                    } else {
+                                        // Reset counter if more than 30 seconds have passed
+                                        ERROR_COUNT = 1;
+                                        log_info!("Reset ERROR_COUNT to 1");
+                                    }
+                                } else {
+                                    ERROR_COUNT = 1;
+                                    log_info!("Initialized ERROR_COUNT to 1");
+                                }
+                                LAST_ERROR_TIME = Some(now);
+                                
+                                // If we have 3 consecutive errors, stop recording
+                                if ERROR_COUNT == 1 {
+                                    log_error!("Too many transcription errors ({}), stopping recording", ERROR_COUNT);
+                                    log_info!("Emitting transcript-error event to frontend");
+                                    // Determine specific error type for better user feedback
+                                    let error_msg = if e.contains("Failed to connect") || e.contains("Connection refused") {
+                                        "Transcription service is not available. Please check if the server is running.".to_string()
+                                    } else if e.contains("timeout") {
+                                        "Transcription service is not responding. Please check your connection.".to_string()
+                                    } else {
+                                        format!("Transcription service error: {}", e)
+                                    };
+                                    if let Err(emit_err) = app_handle.emit("transcript-error", error_msg) {
+                                        log_error!("Failed to emit transcript error: {}", emit_err);
+                                    }
+                                    log_info!("Set RECORDING_FLAG and IS_RUNNING to false due to error");
+                                    // Stop recording
+                                    RECORDING_FLAG.store(false, Ordering::SeqCst);
+                                    if let Some(is_running) = &IS_RUNNING {
+                                        is_running.store(false, Ordering::SeqCst);
+                                    }
+                                    // Reset error counters
+                                    ERROR_COUNT = 0;
+                                    LAST_ERROR_TIME = None;
+                                    return; // Exit the transcription loop
                                 }
                             }
                         }
                     }
-                    Err(e) => {
-                        log_error!("Transcription error: {}", e);
-                    }
+                }
+                
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            
+            // Emit any remaining transcript when recording stops
+            if let Some(update) = accumulator.check_timeout() {
+                if let Err(e) = app_handle.emit("transcript-update", update) {
+                    log_error!("Failed to send final transcript update: {}", e);
                 }
             }
             
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        
-        // Emit any remaining transcript when recording stops
-        if let Some(update) = accumulator.check_timeout() {
-            if let Err(e) = app_handle.emit("transcript-update", update) {
-                log_error!("Failed to send final transcript update: {}", e);
-            }
-        }
-        
-        log_info!("Transcription task ended");
-    });
+            log_info!("Transcription task ended");
+        }));
+    }
     
     Ok(())
 }
@@ -603,6 +585,14 @@ async fn stop_recording(args: RecordingArgs) -> Result<(), String> {
             is_running.store(false, Ordering::SeqCst);
             log_info!("Set recording flag to false, waiting for streams to stop...");
             
+            // Stop the transcription task
+            if let Some(task) = TRANSCRIPTION_TASK.take() {
+                log_info!("Stopping transcription task...");
+                task.abort();
+                // Give the task time to clean up
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            
             // Give the tokio task time to finish and release its references
             tokio::time::sleep(Duration::from_millis(100)).await;
             
@@ -630,6 +620,7 @@ async fn stop_recording(args: RecordingArgs) -> Result<(), String> {
             MIC_STREAM = None;
             SYSTEM_STREAM = None;
             IS_RUNNING = None;
+            TRANSCRIPTION_TASK = None;
             
             // Give streams time to fully clean up
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -762,6 +753,7 @@ async fn stop_recording(args: RecordingArgs) -> Result<(), String> {
         SYSTEM_STREAM = None;
         IS_RUNNING = None;
         RECORDING_START_TIME = None;
+        TRANSCRIPTION_TASK = None;
     }
     
     Ok(())

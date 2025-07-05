@@ -15,6 +15,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useRouter } from 'next/navigation';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface TranscriptUpdate {
   text: string;
@@ -64,6 +65,8 @@ export default function Home() {
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
+  const [showErrorAlert, setShowErrorAlert] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { setCurrentMeeting, setMeetings, meetings, isMeetingActive, setIsMeetingActive, setIsRecording: setSidebarIsRecording , serverAddress} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
@@ -411,7 +414,7 @@ export default function Home() {
         setIsMeetingActive(false);
         router.push('/meeting-details');
       }
-
+      setIsMeetingActive(false);
       setIsRecordingState(false);
       
       // Show summary button if we have transcript content
@@ -792,6 +795,22 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      {showErrorAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Alert className="max-w-md mx-4 border-red-200 bg-white shadow-xl">
+            <AlertTitle className="text-red-800">Recording Stopped</AlertTitle>
+            <AlertDescription className="text-red-700">
+              {errorMessage}
+              <button
+                onClick={() => setShowErrorAlert(false)}
+                className="ml-2 text-red-600 hover:text-red-800 underline"
+              >
+                Dismiss
+              </button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
       <div className="flex flex-1 overflow-hidden">
         {/* Left side - Transcript */}
         <div className="w-1/3 min-w-[300px] border-r border-gray-200 bg-white flex flex-col relative">
@@ -943,10 +962,14 @@ export default function Home() {
             <div className="bg-white rounded-full shadow-lg flex items-center">
               <RecordingControls
                 isRecording={isRecording}
-                onRecordingStop={() => handleRecordingStop2(true)}
+                onRecordingStop={(callApi = true) => handleRecordingStop2(callApi)}
                 onRecordingStart={handleRecordingStart}
                 onTranscriptReceived={handleTranscriptUpdate}
                 barHeights={barHeights}
+                onTranscriptionError={(message) => {
+                  setErrorMessage(message);
+                  setShowErrorAlert(true);
+                }}
               />
             </div>
           </div>

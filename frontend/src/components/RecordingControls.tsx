@@ -5,13 +5,16 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Play, Pause, Square, Mic } from 'lucide-react';
 import { ProcessRequest, SummaryResponse } from '@/types/summary';
+import { listen } from '@tauri-apps/api/event';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface RecordingControlsProps {
   isRecording: boolean;
   barHeights: string[];
-  onRecordingStop: () => void;
+  onRecordingStop: (callApi?: boolean) => void;
   onRecordingStart: () => void;
   onTranscriptReceived: (summary: SummaryResponse) => void;
+  onTranscriptionError?: (message: string) => void;
 }
 
 export const RecordingControls: React.FC<RecordingControlsProps> = ({
@@ -20,6 +23,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   onRecordingStop,
   onRecordingStart,
   onTranscriptReceived,
+  onTranscriptionError,
 }) => {
   const [showPlayback, setShowPlayback] = useState(false);
   const [recordingPath, setRecordingPath] = useState<string | null>(null);
@@ -31,6 +35,8 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
   const stopTimeoutRef = useRef<{ stop: () => void } | null>(null);
   const MIN_RECORDING_DURATION = 2000; // 2 seconds minimum recording time
+  const [transcriptionErrors, setTranscriptionErrors] = useState(0);
+
 
   const currentTime = 0;
   const duration = 0;
@@ -94,7 +100,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       setRecordingPath(savePath);
       // setShowPlayback(true);
       setIsProcessing(false);
-      onRecordingStop();
+      onRecordingStop(true);
     } catch (error) {
       console.error('Failed to stop recording:', error);
       if (error instanceof Error) {
@@ -114,7 +120,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
         }
       }
       setIsProcessing(false);
-      onRecordingStop();
+      onRecordingStop(false);
     } finally {
       setIsStopping(false);
     }
@@ -178,7 +184,31 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
     };
   }, []);
 
-  return (
+  useEffect(() => {
+    console.log('Setting up transcript-error event listener');
+    const unsubscribe = listen('transcript-error', (event) => {
+      console.log('transcript-error event received:', event);
+      console.error('Transcription error received:', event.payload);
+      const errorMessage = event.payload as string;
+      setTranscriptionErrors(prev => {
+        const newCount = prev + 1;
+        console.log('Transcription error count incremented:', newCount);
+        return newCount;
+      });
+      setIsProcessing(false);
+      console.log('Calling onRecordingStop(false) due to transcript error');
+      onRecordingStop(false);
+      if (onTranscriptionError) {
+        onTranscriptionError(errorMessage);
+      }
+    });
+    return () => {
+      console.log('Cleaning up transcript-error event listener');
+      unsubscribe.then(unsub => unsub());
+    };
+  }, [onRecordingStop, onTranscriptionError]);
+
+    return (
     <div className="flex flex-col space-y-2">
       <div className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-4 py-2">
         {isProcessing ? (
@@ -264,7 +294,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
           </>
         )}
       </div>
-      {/* {showPlayback && recordingPath && (
+            {/* {showPlayback && recordingPath && (
         <div className="text-sm text-gray-600 px-4">
           Recording saved to: {recordingPath}
         </div>
