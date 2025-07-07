@@ -456,7 +456,7 @@ class DatabaseManager:
         if provider not in provider_list:
             raise ValueError(f"Invalid provider: {provider}")
         if provider == "localWhisper":
-            api_key_name = "localWhisperApiKey"
+            api_key_name = "whisperApiKey"
         elif provider == "deepgram":
             api_key_name = "deepgramApiKey"
         elif provider == "elevenLabs":
@@ -475,7 +475,7 @@ class DatabaseManager:
         if provider not in provider_list:
             raise ValueError(f"Invalid provider: {provider}")
         if provider == "localWhisper":
-            api_key_name = "localWhisperApiKey"
+            api_key_name = "whisperApiKey"
         elif provider == "deepgram":
             api_key_name = "deepgramApiKey"
         elif provider == "elevenLabs":

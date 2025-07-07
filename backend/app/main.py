@@ -498,9 +498,10 @@ async def save_transcript(request: SaveTranscriptRequest):
 async def get_model_config():
     """Get the current model configuration"""
     model_config = await db.get_model_config()
-    api_key = await db.get_api_key(model_config["provider"])
-    if api_key != None:
-        model_config["apiKey"] = api_key
+    if model_config:
+        api_key = await db.get_api_key(model_config["provider"])
+        if api_key != None:
+            model_config["apiKey"] = api_key
     return model_config
 
 @app.post("/save-model-config")
@@ -515,9 +516,10 @@ async def save_model_config(request: SaveModelConfigRequest):
 async def get_transcript_config():
     """Get the current transcript configuration"""
     transcript_config = await db.get_transcript_config()
-    transcript_api_key = await db.get_transcript_api_key(transcript_config["provider"])
-    if transcript_api_key != None:
-        transcript_config["apiKey"] = transcript_api_key
+    if transcript_config:
+        transcript_api_key = await db.get_transcript_api_key(transcript_config["provider"])
+        if transcript_api_key != None:
+            transcript_config["apiKey"] = transcript_api_key
     return transcript_config
 
 @app.post("/save-transcript-config")
