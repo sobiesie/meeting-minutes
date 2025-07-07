@@ -69,13 +69,13 @@ const Sidebar: React.FC = () => {
     }
   }, [expandedFolders]);
 
-  useEffect(() => {
-    if (settingsSaveSuccess !== null) {
-      const timer = setTimeout(() => {
-        setSettingsSaveSuccess(null);
-      }, 3000);
-    }
-  }, [settingsSaveSuccess]);
+  // useEffect(() => {
+  //   if (settingsSaveSuccess !== null) {
+  //     const timer = setTimeout(() => {
+  //       setSettingsSaveSuccess(null);
+  //     }, 3000);
+  //   }
+  // }, [settingsSaveSuccess]);
 
 
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
@@ -342,7 +342,18 @@ const Sidebar: React.FC = () => {
               onSaveTranscript={handleSaveTranscriptConfig}
               setSaveSuccess={setSettingsSaveSuccess}
             />
+            <DialogFooter>
+                    {settingsSaveSuccess !== null && (
+                      <MessageToast 
+                        message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} 
+                        type={settingsSaveSuccess ? 'success' : 'error'} 
+                        show={settingsSaveSuccess !== null}
+                        setShow={() => setSettingsSaveSuccess(null)}
+                      />
+                    )}
+                  </DialogFooter>
           </DialogContent>
+          
         </Dialog>
         {/* <button
           onClick={() => {
@@ -589,7 +600,12 @@ const Sidebar: React.FC = () => {
                   />
                   <DialogFooter>
                     {settingsSaveSuccess !== null && (
-                      <MessageToast message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} type={settingsSaveSuccess ? 'success' : 'error'} />
+                      <MessageToast 
+                        message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} 
+                        type={settingsSaveSuccess ? 'success' : 'error'} 
+                        show={settingsSaveSuccess !== null}
+                        setShow={() => setSettingsSaveSuccess(null)}
+                      />
                     )}
                   </DialogFooter>
 

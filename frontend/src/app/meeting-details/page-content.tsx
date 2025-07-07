@@ -96,16 +96,16 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     console.log('Transcript settings:', transcriptModelConfig);
   }, [transcriptModelConfig]);
 
-  // Reset settings save success after showing toast
-  useEffect(() => {
-    if (settingsSaveSuccess !== null) {
-      const timer = setTimeout(() => {
-        setSettingsSaveSuccess(null);
-      }, 3000); // Same duration as toast
+  // // Reset settings save success after showing toast
+  // useEffect(() => {
+  //   if (settingsSaveSuccess !== null) {
+  //     const timer = setTimeout(() => {
+  //       setSettingsSaveSuccess(null);
+  //     }, 3000); // Same duration as toast
       
-      return () => clearTimeout(timer);
-    }
-  }, [settingsSaveSuccess]);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [settingsSaveSuccess]);
 
   const generateAISummary = useCallback(async (customPrompt: string = '') => {
     setSummaryStatus('processing');
@@ -714,6 +714,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                             <MessageToast 
                               message={settingsSaveSuccess ? 'Settings saved successfully' : 'Failed to save settings'} 
                               type={settingsSaveSuccess ? 'success' : 'error'} 
+                              show={settingsSaveSuccess !== null}
+                              setShow={() => setSettingsSaveSuccess(null)}
                             />
                           </DialogFooter>
                         )}
