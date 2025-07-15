@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { load } from '@tauri-apps/plugin-store';
+import Analytics from '@/lib/analytics';
 
 
 interface SidebarItem {
@@ -152,6 +153,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       // If not recording, navigate to home page and set flag to start recording automatically
       sessionStorage.setItem('autoStartRecording', 'true');
       router.push('/');
+      
+      // Track recording initiation from sidebar
+      Analytics.trackButtonClick('start_recording', 'sidebar');
     }
     // The actual recording start/stop is handled in the Home component
   };
@@ -179,6 +183,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       
       const results = await response.json();
       setSearchResults(results);
+      
+      // Track search performed
+      Analytics.trackSearchPerformed(query, results.length);
     } catch (error) {
       console.error('Error searching transcripts:', error);
       setSearchResults([]);
