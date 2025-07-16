@@ -100,6 +100,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
             'Expires': '0'
           }
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         // Transform the response into the expected format
         const transformedMeetings = data.map((meeting: any) => ({
@@ -107,10 +112,18 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
           title: meeting.title
         }));
         setMeetings(transformedMeetings);
-        router.push('/')
+        router.push('/');
+        
+        // Track successful backend connection
+        console.log('Tracking successful backend connection');
+        Analytics.trackBackendConnection(true);
       } catch (error) {
         console.error('Error fetching meetings:', error);
         setMeetings([]);
+        
+        // Track failed backend connection
+        console.log('Tracking failed backend connection:', error);
+        Analytics.trackBackendConnection(false, error instanceof Error ? error.message : 'Unknown error');
       }
     };
     fetchMeetings();

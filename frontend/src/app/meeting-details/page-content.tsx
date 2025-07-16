@@ -16,13 +16,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { MessageToast } from '@/components/MessageToast';
-
+import Analytics from '@/lib/analytics';
 
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
 export default function PageContent({ meeting, summaryData }: { meeting: any, summaryData: Summary }) {
   const [transcripts, setTranscripts] = useState<Transcript[]>(meeting.transcripts);
+  
+
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
   const [meetingTitle, setMeetingTitle] = useState(meeting.title || '+ New Call');
@@ -53,6 +55,11 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   useEffect(() => {
     setLocalMeetings(sidebarMeetings);
   }, [sidebarMeetings]);
+
+  // Track page view
+  useEffect(() => {
+    Analytics.trackPageView('meeting_details');
+  }, []);
 
   useEffect(() => {
     const fetchModelConfig = async () => {
@@ -121,6 +128,18 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       
       console.log('Generating summary for transcript length:', fullTranscript.length);
       
+      // Track summary generation started
+      await Analytics.trackSummaryGenerationStarted(
+        modelConfig.provider,
+        modelConfig.model,
+        fullTranscript.length
+      );
+      
+      // Track custom prompt usage if present
+      if (customPrompt.trim().length > 0) {
+        await Analytics.trackCustomPromptUsed(customPrompt.trim().length);
+      }
+      
       // Process transcript and get process_id
       console.log('Processing transcript...');
       const response = await fetch(`${serverAddress}/process-transcript`, {
@@ -159,6 +178,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             setSummaryError(errorData.error || 'Unknown error');
             setSummaryStatus('error');
             clearInterval(pollInterval);
+            
+            // Track summary generation error
+            await Analytics.trackSummaryGenerationCompleted(
+              modelConfig.provider,
+              modelConfig.model,
+              false,
+              undefined,
+              errorData.error || 'Unknown error'
+            );
             return;
           }
 
@@ -169,6 +197,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             setSummaryError(result.error || 'Unknown error');
             setSummaryStatus('error');
             clearInterval(pollInterval);
+            
+            // Track summary generation error
+            await Analytics.trackSummaryGenerationCompleted(
+              modelConfig.provider,
+              modelConfig.model,
+              false,
+              undefined,
+              result.error || 'Unknown error'
+            );
             return;
           }
 
@@ -180,6 +217,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
               setSummaryError('Summary generation failed. Please check your model/API key settings.');
               setSummaryStatus('error');
               clearInterval(pollInterval);
+              
+              // Track summary generation failure
+              await Analytics.trackSummaryGenerationCompleted(
+                modelConfig.provider,
+                modelConfig.model,
+                false,
+                undefined,
+                'Empty summary generated'
+              );
               return;
             }
             clearInterval(pollInterval);
@@ -214,6 +260,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
             setAiSummary(formattedSummary);
             setSummaryStatus('completed');
+            
+            // Track successful summary generation
+            await Analytics.trackSummaryGenerationCompleted(
+              modelConfig.provider,
+              modelConfig.model,
+              true
+            );
           }
         } catch (error) {
           console.error('Failed to get summary status:', error);
@@ -224,6 +277,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           }
           setSummaryStatus('error');
           clearInterval(pollInterval);
+          
+          // Track summary generation error
+          await Analytics.trackSummaryGenerationCompleted(
+            modelConfig.provider,
+            modelConfig.model,
+            false,
+            undefined,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
 
         }
       }, 5000); // Poll every 5 seconds
@@ -238,6 +300,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
         setSummaryError('Failed to generate summary: Unknown error');
       }
       setSummaryStatus('error');
+      
+      // Track summary generation error
+      await Analytics.trackSummaryGenerationCompleted(
+        modelConfig.provider,
+        modelConfig.model,
+        false,
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error'
+      );
     }
   }, [transcripts, modelConfig, meeting.id]);
 
@@ -301,6 +372,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const handleSummaryChange = (newSummary: Summary) => {
     setAiSummary(newSummary);
     debouncedSaveSummary(newSummary);
+    
+    // Track summary editing
+    Analytics.trackFeatureUsed('summary_edited');
   };
 
   const handleTitleChange = (newTitle: string) => {
@@ -335,6 +409,13 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
     try {
       console.log('Regenerating summary with original transcript...');
+      
+      // Track summary regeneration started
+      await Analytics.trackSummaryGenerationStarted(
+        modelConfig.provider,
+        modelConfig.model,
+        originalTranscript.length
+      );
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
@@ -413,8 +494,24 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
             setAiSummary(formattedSummary);
             setSummaryStatus('completed');
+            
+            // Track successful summary regeneration
+            await Analytics.trackSummaryGenerationCompleted(
+              modelConfig.provider,
+              modelConfig.model,
+              true
+            );
           } else if (result.status === 'error') {
             clearInterval(pollInterval);
+            
+            // Track summary regeneration error
+            await Analytics.trackSummaryGenerationCompleted(
+              modelConfig.provider,
+              modelConfig.model,
+              false,
+              undefined,
+              result.error || 'Failed to generate summary'
+            );
             throw new Error(result.error || 'Failed to generate summary');
           }
         } catch (error) {
@@ -427,6 +524,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           }
           setSummaryStatus('error');
           setAiSummary(null);
+          
+          // Track summary regeneration error
+          await Analytics.trackSummaryGenerationCompleted(
+            modelConfig.provider,
+            modelConfig.model,
+            false,
+            undefined,
+            error instanceof Error ? error.message : 'An unexpected error occurred'
+          );
         }
       }, 10000);
 
@@ -440,6 +546,15 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       }
       setSummaryStatus('error');
       setAiSummary(null);
+      
+      // Track summary regeneration error
+      await Analytics.trackSummaryGenerationCompleted(
+        modelConfig.provider,
+        modelConfig.model,
+        false,
+        undefined,
+        error instanceof Error ? error.message : 'An unexpected error occurred'
+      );
     }
   }, [originalTranscript, modelConfig, meeting.id]);
 
@@ -557,6 +672,19 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       };
       console.log('Saving model config with payload:', payload);
       
+      // Track model configuration change
+      if (updatedConfig && (
+        updatedConfig.provider !== modelConfig.provider || 
+        updatedConfig.model !== modelConfig.model
+      )) {
+        await Analytics.trackModelChanged(
+          modelConfig.provider,
+          modelConfig.model,
+          updatedConfig.provider,
+          updatedConfig.model
+        );
+      }
+      
       const response = await fetch(`${serverAddress}/save-model-config`, {
         method: 'POST',
         headers: {
@@ -576,6 +704,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       console.log('Save model config success:', responseData);
       setSettingsSaveSuccess(true);
       setModelConfig(payload);
+
+      await Analytics.trackSettingsChanged('model_config', `${payload.provider}_${payload.model}`);
+
       
     } catch (error) {
       console.error('Failed to save model config:', error);
@@ -616,6 +747,8 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       const responseData = await response.json();
       console.log('Save transcript config success:', responseData);
       setSettingsSaveSuccess(true);
+      const transcriptConfigToSave = updatedConfig || transcriptModelConfig;
+      await Analytics.trackSettingsChanged('transcript_config', `${transcriptConfigToSave.provider}_${transcriptConfigToSave.model}`);
     } catch (error) {
       console.error('Failed to save transcript config:', error);
       setSettingsSaveSuccess(false);
@@ -639,7 +772,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={handleCopyTranscript}
+                  onClick={() => {
+                    Analytics.trackButtonClick('copy_transcript', 'meeting_details');
+                    handleCopyTranscript();
+                  }}
                   disabled={transcripts?.length === 0}
                   className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
                     transcripts?.length === 0
@@ -657,7 +793,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                 {transcripts?.length > 0 && (
                   <>
                     <button
-                      onClick={() => handleGenerateSummary(customPrompt)}
+                      onClick={() => {
+                        Analytics.trackButtonClick('generate_summary', 'meeting_details');
+                        handleGenerateSummary(customPrompt);
+                      }}
                       disabled={summaryStatus === 'processing'}
                       className={`px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm ${
                         summaryStatus === 'processing'
@@ -764,7 +903,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={saveAllChanges}
+                  onClick={() => {
+                    Analytics.trackButtonClick('save_changes', 'meeting_details');
+                    saveAllChanges();
+                  }}
                   disabled={isSaving}
                   className={`px-3 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-sm ${isSaving ? 'bg-gray-200 text-gray-500' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
                 >
@@ -865,6 +1007,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                   error={summaryError}
                   onSummaryChange={(newSummary) => setAiSummary(newSummary)}
                   onRegenerateSummary={() => {
+                    Analytics.trackButtonClick('regenerate_summary', 'meeting_details');
                     handleRegenerateSummary();
                   }}
                   meeting={{

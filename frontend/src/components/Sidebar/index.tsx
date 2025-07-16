@@ -101,7 +101,7 @@ const Sidebar: React.FC = () => {
       setSettingsSaveSuccess(true);
       
       // Track settings change
-      Analytics.trackSettingsChanged('model_config', `${config.provider}_${config.model}`);
+      await Analytics.trackSettingsChanged('model_config', `${config.provider}_${config.model}`);
     } catch (error) {
       console.error('Error saving model config:', error);
       setSettingsSaveSuccess(false);
@@ -139,7 +139,7 @@ const Sidebar: React.FC = () => {
       
       // Track settings change
       const transcriptConfigToSave = updatedConfig || transcriptModelConfig;
-      Analytics.trackSettingsChanged('transcript_config', `${transcriptConfigToSave.provider}_${transcriptConfigToSave.model}`);
+      await Analytics.trackSettingsChanged('transcript_config', `${transcriptConfigToSave.provider}_${transcriptConfigToSave.model}`);
     } catch (error) {
       console.error('Failed to save transcript config:', error);
       setSettingsSaveSuccess(false);

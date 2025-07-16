@@ -7,6 +7,7 @@ import { Play, Pause, Square, Mic } from 'lucide-react';
 import { ProcessRequest, SummaryResponse } from '@/types/summary';
 import { listen } from '@tauri-apps/api/event';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import Analytics from '@/lib/analytics';
 
 interface RecordingControlsProps {
   isRecording: boolean;
@@ -100,6 +101,10 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       setRecordingPath(savePath);
       // setShowPlayback(true);
       setIsProcessing(false);
+      
+      // Track successful transcription
+      Analytics.trackTranscriptionSuccess();
+      
       onRecordingStop(true);
     } catch (error) {
       console.error('Failed to stop recording:', error);
@@ -173,9 +178,9 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   const cancelStopRecording = useCallback(() => {
     if (stopTimeoutRef.current) {
       stopTimeoutRef.current.stop();
-      stopTimeoutRef.current = null;
-    }
-  }, []);
+              stopTimeoutRef.current = null;
+      }
+    }, []);
 
   useEffect(() => {
     return () => {
@@ -186,27 +191,46 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
 
   useEffect(() => {
     console.log('Setting up transcript-error event listener');
-    const unsubscribe = listen('transcript-error', (event) => {
-      console.log('transcript-error event received:', event);
-      console.error('Transcription error received:', event.payload);
-      const errorMessage = event.payload as string;
-      setTranscriptionErrors(prev => {
-        const newCount = prev + 1;
-        console.log('Transcription error count incremented:', newCount);
-        return newCount;
-      });
-      setIsProcessing(false);
-      console.log('Calling onRecordingStop(false) due to transcript error');
-      onRecordingStop(false);
-      if (onTranscriptionError) {
-        onTranscriptionError(errorMessage);
+    let unsubscribe: (() => void) | undefined;
+    
+    const setupListener = async () => {
+      try {
+        unsubscribe = await listen('transcript-error', (event) => {
+          console.log('transcript-error event received:', event);
+          console.error('Transcription error received:', event.payload);
+          const errorMessage = event.payload as string;
+          
+          // Track the error (no debouncing needed since backend only emits once)
+          Analytics.trackTranscriptionError(errorMessage);
+          console.log('Tracked transcription error:', errorMessage);
+          
+          setTranscriptionErrors(prev => {
+            const newCount = prev + 1;
+            console.log('Transcription error count incremented:', newCount);
+            return newCount;
+          });
+          setIsProcessing(false);
+          console.log('Calling onRecordingStop(false) due to transcript error');
+          onRecordingStop(false);
+          if (onTranscriptionError) {
+            onTranscriptionError(errorMessage);
+          }
+        });
+        console.log('transcript-error event listener set up successfully');
+      } catch (error) {
+        console.error('Failed to set up transcript-error event listener:', error);
       }
-    });
+    };
+    
+    setupListener();
+    
     return () => {
       console.log('Cleaning up transcript-error event listener');
-      unsubscribe.then(unsub => unsub());
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [onRecordingStop, onTranscriptionError]);
+  }, []); // Include dependencies
 
     return (
     <div className="flex flex-col space-y-2">
@@ -256,13 +280,25 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
             ) : (
               <>
                 <button
-                  onClick={isRecording ? 
-                    (isStopping ? cancelStopRecording : handleStopRecording) : 
-                    handleStartRecording}
+                  onClick={() => {
+                    if (isRecording) {
+                      if (isStopping) {
+                        Analytics.trackButtonClick('cancel_stop_recording', 'recording_controls');
+                        cancelStopRecording();
+                      } else {
+                        Analytics.trackButtonClick('stop_recording', 'recording_controls');
+                        handleStopRecording();
+                      }
+                    } else {
+                      Analytics.trackButtonClick('start_recording', 'recording_controls');
+                      handleStartRecording();
+                    }
+                  }}
                   disabled={isStarting || isProcessing}
                   className={`w-12 h-12 flex items-center justify-center ${
                     isStarting || isProcessing ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'
                   } rounded-full text-white transition-colors relative`}
+
                 >
                   {isRecording ? (
                     <>

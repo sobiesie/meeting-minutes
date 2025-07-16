@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Transcript, Summary } from "@/types";
 import PageContent from "./page-content";
 import { useRouter } from "next/navigation";
+import Analytics from "@/lib/analytics";
 
 interface MeetingDetailsResponse {
   id: string;
@@ -37,6 +38,7 @@ export default function MeetingDetails() {
   useEffect(() => {
     if (!currentMeeting?.id || currentMeeting.id === 'intro-call') {
       setError("No meeting selected");
+      Analytics.trackPageView('meeting_details');
       return;
     }
 

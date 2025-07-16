@@ -124,6 +124,9 @@ export default function Home() {
 
   useEffect(() => {
     setCurrentMeeting({ id: 'intro-call', title: meetingTitle });
+    
+    // Track page view
+    Analytics.trackPageView('home');
   }, [meetingTitle, setCurrentMeeting]);
 
   useEffect(() => {
@@ -421,7 +424,6 @@ export default function Home() {
       }
       setIsMeetingActive(false);
       setIsRecordingState(false);
-      Analytics.trackButtonClick('stop_recording', 'home_page');
       // Show summary button if we have transcript content
       if (transcripts.length > 0) {
         setShowSummary(true);
@@ -431,7 +433,6 @@ export default function Home() {
     } catch (error) {
       console.error('Error in handleRecordingStop2:', error);
       setIsRecordingState(false);
-      Analytics.trackButtonClick('stop_recording_error', 'home_page');
     }
   };
 

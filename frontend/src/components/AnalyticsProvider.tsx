@@ -1,33 +1,69 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect, ReactNode, useRef } from 'react';
 import Analytics from '@/lib/analytics';
 
 interface AnalyticsProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function AnalyticsProvider({ children }: AnalyticsProviderProps) {
+  const initialized = useRef(false);
+
   useEffect(() => {
+    // Prevent duplicate initialization in React StrictMode
+    if (initialized.current) {
+      return;
+    }
+
     const initAnalytics = async () => {
       // TODO: Replace with your actual PostHog API key
       const POSTHOG_API_KEY = process.env.NEXT_PUBLIC_POSTHOG_API_KEY || '';
       const ANALYTICS_ENABLED = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED === 'true';
       
       if (POSTHOG_API_KEY && ANALYTICS_ENABLED) {
+        // Mark as initialized to prevent duplicates
+        initialized.current = true;
+        
+        // Get persistent user ID FIRST (before initializing analytics)
+        const userId = await Analytics.getPersistentUserId();
+        
+        // Initialize analytics
         await Analytics.init(POSTHOG_API_KEY, true);
-        await Analytics.trackAppStarted();
         
-        // Generate a unique user ID if not exists
-        const userId = localStorage.getItem('meetily_user_id') || 
-                      `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('meetily_user_id', userId);
-        
+        // Identify user with enhanced properties immediately after init
         await Analytics.identify(userId, {
           app_version: '0.0.5',
           platform: 'tauri',
           first_seen: new Date().toISOString(),
+          os: navigator.platform,
+          user_agent: navigator.userAgent,
         });
+        
+        // Start analytics session with the same user ID
+        await Analytics.startSession(userId);
+        
+        // Check and track first launch (after analytics is initialized)
+        await Analytics.checkAndTrackFirstLaunch();
+        
+        // Track app started
+        await Analytics.trackAppStarted();
+        
+        // Check and track daily usage
+        await Analytics.checkAndTrackDailyUsage();
+        
+        // Set up cleanup on page unload
+        const handleBeforeUnload = () => {
+          Analytics.cleanup();
+        };
+        
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        
+        // Cleanup function
+        return () => {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          Analytics.cleanup();
+        };
       } else {
         console.log('Analytics disabled or API key not provided');
       }

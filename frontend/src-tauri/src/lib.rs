@@ -28,6 +28,7 @@ static mut IS_RUNNING: Option<Arc<AtomicBool>> = None;
 static mut RECORDING_START_TIME: Option<std::time::Instant> = None;
 static mut TRANSCRIPTION_TASK: Option<tokio::task::JoinHandle<()>> = None;
 static mut ANALYTICS_CLIENT: Option<Arc<AnalyticsClient>> = None;
+static mut ERROR_EVENT_EMITTED: bool = false;
 
 // Audio configuration constants
 const CHUNK_DURATION_MS: u32 = 30000; // 30 seconds per chunk for better sentence processing
@@ -241,6 +242,12 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     // Initialize recording flag and buffers
     RECORDING_FLAG.store(true, Ordering::SeqCst);
     log_info!("Recording flag set to true");
+    
+    // Reset error event flag for new recording session
+    unsafe {
+        ERROR_EVENT_EMITTED = false;
+    }
+
 
     // Store recording start time
     unsafe {
@@ -506,8 +513,8 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
                                 }
                                 LAST_ERROR_TIME = Some(now);
                                 
-                                // If we have 3 consecutive errors, stop recording
-                                if ERROR_COUNT == 1 {
+                                // If we have 1 error and haven't emitted event yet, emit event and stop recording
+                                if ERROR_COUNT == 1 && !ERROR_EVENT_EMITTED {
                                     log_error!("Too many transcription errors ({}), stopping recording", ERROR_COUNT);
                                     log_info!("Emitting transcript-error event to frontend");
                                     // Determine specific error type for better user feedback
@@ -521,6 +528,7 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
                                     if let Err(emit_err) = app_handle.emit("transcript-error", error_msg) {
                                         log_error!("Failed to emit transcript error: {}", emit_err);
                                     }
+                                    ERROR_EVENT_EMITTED = true; // Mark that we've emitted the event
                                     log_info!("Set RECORDING_FLAG and IS_RUNNING to false due to error");
                                     // Stop recording
                                     RECORDING_FLAG.store(false, Ordering::SeqCst);
@@ -530,6 +538,7 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
                                     // Reset error counters
                                     ERROR_COUNT = 0;
                                     LAST_ERROR_TIME = None;
+                                    ERROR_EVENT_EMITTED = false; // Reset for next recording session
                                     return; // Exit the transcription loop
                                 }
                             }
@@ -923,6 +932,120 @@ async fn is_analytics_enabled() -> bool {
     }
 }
 
+// Enhanced analytics commands for Phase 1
+#[tauri::command]
+async fn start_analytics_session(user_id: String) -> Result<String, String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.start_session(user_id).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn end_analytics_session() -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.end_session().await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+
+
+#[tauri::command]
+async fn track_daily_active_user() -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_daily_active_user().await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn track_user_first_launch() -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_user_first_launch().await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+// Summary generation analytics commands
+#[tauri::command]
+async fn track_summary_generation_started(model_provider: String, model_name: String, transcript_length: usize) -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_summary_generation_started(&model_provider, &model_name, transcript_length).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn track_summary_generation_completed(model_provider: String, model_name: String, success: bool, duration_seconds: Option<u64>, error_message: Option<String>) -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_summary_generation_completed(&model_provider, &model_name, success, duration_seconds, error_message.as_deref()).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn track_summary_regenerated(model_provider: String, model_name: String) -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_summary_regenerated(&model_provider, &model_name).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn track_model_changed(old_provider: String, old_model: String, new_provider: String, new_model: String) -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_model_changed(&old_provider, &old_model, &new_provider, &new_model).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn track_custom_prompt_used(prompt_length: usize) -> Result<(), String> {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.track_custom_prompt_used(prompt_length).await
+        } else {
+            Err("Analytics client not initialized".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn is_analytics_session_active() -> bool {
+    unsafe {
+        if let Some(client) = &ANALYTICS_CLIENT {
+            client.is_session_active().await
+        } else {
+            false
+        }
+    }
+}
+
 // Helper function to convert stereo to mono
 fn stereo_to_mono(stereo: &[i16]) -> Vec<i16> {
     let mut mono = Vec::with_capacity(stereo.len() / 2);
@@ -966,6 +1089,16 @@ pub fn run() {
             track_settings_changed,
             track_feature_used,
             is_analytics_enabled,
+            start_analytics_session,
+            end_analytics_session,
+            track_daily_active_user,
+            track_user_first_launch,
+            is_analytics_session_active,
+            track_summary_generation_started,
+            track_summary_generation_completed,
+            track_summary_regenerated,
+            track_model_changed,
+            track_custom_prompt_used,
         ])
         .plugin(tauri_plugin_store::Builder::new().build())
         .run(tauri::generate_context!())
