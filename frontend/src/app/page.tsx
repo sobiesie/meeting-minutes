@@ -16,6 +16,8 @@ import { useNavigation } from '@/hooks/useNavigation';
 import { useRouter } from 'next/navigation';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Analytics from '@/lib/analytics';
+
 
 interface TranscriptUpdate {
   text: string;
@@ -287,10 +289,12 @@ export default function Home() {
       setIsRecordingState(true); // This will also update the sidebar via the useEffect
       setTranscripts([]); // Clear previous transcripts when starting new recording
       setIsMeetingActive(true);
+      Analytics.trackButtonClick('start_recording', 'home_page');
     } catch (error) {
       console.error('Failed to start recording:', error);
       alert('Failed to start recording. Check console for details.');
       setIsRecordingState(false); // Reset state on error
+      Analytics.trackButtonClick('start_recording_error', 'home_page');
     }
   };
   
@@ -385,6 +389,7 @@ export default function Home() {
         }
       });
       console.log('Recording stopped successfully');
+      
 
       // Save to SQLite
       if (isCallApi) {
@@ -416,7 +421,7 @@ export default function Home() {
       }
       setIsMeetingActive(false);
       setIsRecordingState(false);
-      
+      Analytics.trackButtonClick('stop_recording', 'home_page');
       // Show summary button if we have transcript content
       if (transcripts.length > 0) {
         setShowSummary(true);
@@ -426,6 +431,7 @@ export default function Home() {
     } catch (error) {
       console.error('Error in handleRecordingStop2:', error);
       setIsRecordingState(false);
+      Analytics.trackButtonClick('stop_recording_error', 'home_page');
     }
   };
 
