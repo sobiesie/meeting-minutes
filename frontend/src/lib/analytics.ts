@@ -17,7 +17,7 @@ export class Analytics {
   private static currentUserId: string | null = null;
   private static initializationPromise: Promise<void> | null = null;
 
-  static async init(apiKey: string, enabled: boolean = true): Promise<void> {
+  static async init(): Promise<void> {
     // Prevent duplicate initialization
     if (this.initialized) {
       return;
@@ -28,13 +28,13 @@ export class Analytics {
       return this.initializationPromise;
     }
 
-    this.initializationPromise = this.doInit(apiKey, enabled);
+    this.initializationPromise = this.doInit();
     return this.initializationPromise;
   }
 
-  private static async doInit(apiKey: string, enabled: boolean): Promise<void> {
+  private static async doInit(): Promise<void> {
     try {
-      await invoke('init_analytics', { apiKey, enabled });
+      await invoke('init_analytics');
       this.initialized = true;
       console.log('Analytics initialized successfully');
     } catch (error) {

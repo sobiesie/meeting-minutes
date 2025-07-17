@@ -806,11 +806,11 @@ async fn save_transcript(file_path: String, content: String) -> Result<(), Strin
 
 // Analytics commands
 #[tauri::command]
-async fn init_analytics(api_key: String, enabled: bool) -> Result<(), String> {
+async fn init_analytics() -> Result<(), String> {
     let config = AnalyticsConfig {
-        api_key,
+        api_key:"phc_cohhHPgfQfnNWl33THRRpCftuRtWx2k5svtKrkpFb04".to_string(),
         host: Some("https://us.i.posthog.com".to_string()),
-        enabled,
+        enabled: true ,
     };
     
     let client = Arc::new(AnalyticsClient::new(config).await);

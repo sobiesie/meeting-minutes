@@ -17,11 +17,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
     }
 
     const initAnalytics = async () => {
-      // TODO: Replace with your actual PostHog API key
-      const POSTHOG_API_KEY = process.env.NEXT_PUBLIC_POSTHOG_API_KEY || '';
-      const ANALYTICS_ENABLED = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED === 'true';
       
-      if (POSTHOG_API_KEY && ANALYTICS_ENABLED) {
         // Mark as initialized to prevent duplicates
         initialized.current = true;
         
@@ -29,7 +25,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
         const userId = await Analytics.getPersistentUserId();
         
         // Initialize analytics
-        await Analytics.init(POSTHOG_API_KEY, true);
+        await Analytics.init();
         
         // Identify user with enhanced properties immediately after init
         await Analytics.identify(userId, {
@@ -64,9 +60,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
           window.removeEventListener('beforeunload', handleBeforeUnload);
           Analytics.cleanup();
         };
-      } else {
-        console.log('Analytics disabled or API key not provided');
-      }
+      
     };
 
     initAnalytics().catch(console.error);
