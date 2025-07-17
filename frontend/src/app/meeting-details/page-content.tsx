@@ -14,7 +14,9 @@ import {
   DialogContent,
   DialogFooter,
   DialogTrigger,
+  DialogTitle,
 } from "@/components/ui/dialog"
+import { VisuallyHidden } from "@/components/ui/visually-hidden"
 import { MessageToast } from '@/components/MessageToast';
 import Analytics from '@/lib/analytics';
 
@@ -827,7 +829,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                       )}
                     </button>
                     <Dialog>
-                      <DialogTrigger>
+                      <DialogTrigger asChild>
                         <button
                         className="px-3 py-2 border rounded-md transition-all duration-200 inline-flex items-center gap-2 shadow-sm bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 active:bg-gray-200"
                         title="Model Settings"
@@ -839,6 +841,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                         </button>
                       </DialogTrigger>
                       <DialogContent>
+                        <VisuallyHidden>
+                          <DialogTitle>Model Settings</DialogTitle>
+                        </VisuallyHidden>
                         <SettingTabs
                           modelConfig={modelConfig}
                           setModelConfig={setModelConfig}

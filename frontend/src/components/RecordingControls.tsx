@@ -226,7 +226,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
     
     return () => {
       console.log('Cleaning up transcript-error event listener');
-      if (unsubscribe) {
+      if (unsubscribe && typeof unsubscribe === 'function') {
         unsubscribe();
       }
     };

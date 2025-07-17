@@ -17,7 +17,9 @@ import {
   DialogContent,
   DialogTrigger,
   DialogFooter,
+  DialogTitle,
 } from "@/components/ui/dialog"
+import { VisuallyHidden } from "@/components/ui/visually-hidden"
 
 import { MessageToast } from '../MessageToast';
 
@@ -344,6 +346,9 @@ const Sidebar: React.FC = () => {
             </button>
           </DialogTrigger>
           <DialogContent>
+            <VisuallyHidden>
+              <DialogTitle>Settings</DialogTitle>
+            </VisuallyHidden>
             <SettingTabs
               modelConfig={modelConfig}
               setModelConfig={setModelConfig}
@@ -600,6 +605,9 @@ const Sidebar: React.FC = () => {
                   </button>
                 </DialogTrigger>
                 <DialogContent>
+                  <VisuallyHidden>
+                    <DialogTitle>Settings</DialogTitle>
+                  </VisuallyHidden>
                   <SettingTabs
                     modelConfig={modelConfig}
                     setModelConfig={setModelConfig}
