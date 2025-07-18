@@ -123,10 +123,13 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    setCurrentMeeting({ id: 'intro-call', title: meetingTitle });
-    
     // Track page view
     Analytics.trackPageView('home');
+  }, []);
+
+  useEffect(() => {
+    setCurrentMeeting({ id: 'intro-call', title: meetingTitle });
+    
   }, [meetingTitle, setCurrentMeeting]);
 
   useEffect(() => {
