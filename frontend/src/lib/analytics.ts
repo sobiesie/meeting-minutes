@@ -289,13 +289,13 @@ export class Analytics {
 
   // Convenience methods for common events
   static async trackPageView(pageName: string): Promise<void> {
-    await this.track('page_view', { page: pageName });
+    await this.track(`page_view_${pageName}`, { page: pageName });
   }
 
   static async trackButtonClick(buttonName: string, location?: string): Promise<void> {
     const properties: AnalyticsProperties = { button: buttonName };
     if (location) properties.location = location;
-    await this.track('button_click', properties);
+    await this.track(`button_click_${buttonName}`, properties);
   }
 
   static async trackError(errorType: string, errorMessage: string): Promise<void> {
