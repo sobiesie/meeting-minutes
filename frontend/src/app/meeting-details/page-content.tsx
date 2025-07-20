@@ -64,6 +64,11 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   }, []);
 
   useEffect(() => {
+    setModelConfig({
+      provider: 'ollama',
+      model: 'llama3.2:latest',
+      whisperModel: 'large-v3'
+    });
     const fetchModelConfig = async () => {
       try {
         const response = await fetch(`${serverAddress}/get-model-config`);
@@ -77,13 +82,17 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     };
 
     fetchModelConfig();
-  }, []);
+  }, [serverAddress]);
 
   useEffect(() => {
     console.log('Model config:', modelConfig);
   }, [modelConfig]);
 
   useEffect(() => {
+    setTranscriptModelConfig({
+      provider: 'localWhisper',
+      model: 'large-v3',
+    });
     const fetchTranscriptSettings = async () => {
       try {
         const response = await fetch(`${serverAddress}/get-transcript-config`);
@@ -99,7 +108,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       }
     };
     fetchTranscriptSettings();
-  }, []);
+  }, [serverAddress]);
 
   useEffect(() => {
     console.log('Transcript settings:', transcriptModelConfig);

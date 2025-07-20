@@ -20,24 +20,24 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const { serverAddress } = useSidebar();
-    useEffect(() => {
-        const fetchTranscriptSettings = async () => {
-            try {
-                const response = await fetch(`${serverAddress}/get-transcript-config`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                if (data.provider !== null) {
-                    setTranscriptModelConfig(data);
-                    setApiKey(data.apiKey || null);
-                }
-            } catch (error) {
-                console.error('Failed to fetch transcript settings:', error);
-            }
-        };
-        fetchTranscriptSettings();
-    }, []);
+    // useEffect(() => {
+    //     const fetchTranscriptSettings = async () => {
+    //         try {
+    //             const response = await fetch(`${serverAddress}/get-transcript-config`);
+    //             if (!response.ok) {
+    //                 throw new Error(`HTTP error! status: ${response.status}`);
+    //             }
+    //             const data = await response.json();
+    //             if (data.provider !== null) {
+    //                 setTranscriptModelConfig(data);
+    //                 setApiKey(data.apiKey || null);
+    //             }
+    //         } catch (error) {
+    //             console.error('Failed to fetch transcript settings:', error);
+    //         }
+    //     };
+    //     fetchTranscriptSettings();
+    // }, []);
 
     useEffect(() => {
         if (transcriptModelConfig.provider === 'localWhisper') {

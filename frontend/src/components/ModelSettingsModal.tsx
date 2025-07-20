@@ -33,24 +33,24 @@ export function ModelSettingsModal({
   const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
   const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
   const { serverAddress } = useSidebar();
-  useEffect(() => {
-    // if (showModelSettings) {
-      const fetchModelConfig = async () => {
-        try {
-          const response = await fetch(`${serverAddress}/get-model-config`);
-          const data = await response.json();
-          if (data.provider !== null) {
-            setModelConfig(data);
-            setApiKey(data.apiKey || null);
-          }
-        } catch (error) {
-          console.error('Failed to fetch model config:', error);
-        }
-      };
+  // useEffect(() => {
+  //   // if (showModelSettings) {
+  //     const fetchModelConfig = async () => {
+  //       try {
+  //         const response = await fetch(`${serverAddress}/get-model-config`);
+  //         const data = await response.json();
+  //         if (data.provider !== null) {
+  //           setModelConfig(data);
+  //           setApiKey(data.apiKey || null);
+  //         }
+  //       } catch (error) {
+  //         console.error('Failed to fetch model config:', error);
+  //       }
+  //     };
 
-      fetchModelConfig();
-    // }
-  }, []);
+  //     fetchModelConfig();
+  //   // }
+  // }, []);
 
   const fetchApiKey = async (provider: string) => {
     try {

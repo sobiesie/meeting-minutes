@@ -42,6 +42,10 @@ export default function MeetingDetails() {
       return;
     }
 
+    setMeetingDetails(null);
+    setMeetingSummary(null);
+    setError(null);
+
     const fetchMeetingDetails = async () => {
       try {
         const response = await fetch(`${serverAddress}/get-meeting/${currentMeeting.id}`, {
@@ -92,7 +96,7 @@ export default function MeetingDetails() {
 
     fetchMeetingDetails();
     fetchMeetingSummary();
-  }, [currentMeeting?.id]);
+  }, [currentMeeting?.id, serverAddress]);
 
   // if (error) {
   //   return (

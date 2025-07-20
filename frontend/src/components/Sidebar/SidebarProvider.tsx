@@ -76,7 +76,37 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const fetchMeetings = async () => {
-      try {
+        if (serverAddress) {
+          try {
+        const response = await fetch(`${serverAddress}/get-meetings`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        const data = await response.json();
+        const transformedMeetings = data.map((meeting: any) => ({
+            id: meeting.id,
+            title: meeting.title
+        }));
+            setMeetings(transformedMeetings);
+            router.push('/');
+            Analytics.trackBackendConnection(true);
+          } catch (error) {
+            console.error('Error fetching meetings:', error);
+            setMeetings([]);
+            router.push('/');
+            Analytics.trackBackendConnection(false, error instanceof Error ? error.message : 'Unknown error');
+          }
+        }
+    }
+    fetchMeetings();
+}, [serverAddress]);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
         const store = await load('store.json', { autoSave: false });
         let serverAddress = await store.get('appServerUrl') as string | null;
         let transcriptServerAddress = await store.get('transcriptServerUrl') as string | null;
@@ -92,41 +122,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         }
         setServerAddress(serverAddress);
         setTranscriptServerAddress(transcriptServerAddress);
-        const response = await fetch(`${serverAddress}/get-meetings`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        // Transform the response into the expected format
-        const transformedMeetings = data.map((meeting: any) => ({
-          id: meeting.id,
-          title: meeting.title
-        }));
-        setMeetings(transformedMeetings);
-        router.push('/');
-        
-        // Track successful backend connection
-        console.log('Tracking successful backend connection');
-        Analytics.trackBackendConnection(true);
-      } catch (error) {
-        console.error('Error fetching meetings:', error);
-        setMeetings([]);
-        
-        // Track failed backend connection
-        console.log('Tracking failed backend connection:', error);
-        Analytics.trackBackendConnection(false, error instanceof Error ? error.message : 'Unknown error');
-      }
+      
     };
-    fetchMeetings();
+    fetchSettings();
   }, []);
 
   const baseItems: SidebarItem[] = [

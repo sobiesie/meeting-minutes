@@ -83,6 +83,52 @@ const Sidebar: React.FC = () => {
 
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
   
+  useEffect(() => {
+    setModelConfig({
+      provider: 'ollama',
+      model: 'llama3.2:latest',
+      whisperModel: 'large-v3',
+    });
+    const fetchModelConfig = async () => {
+      try {
+        const response = await fetch(`${serverAddress}/get-model-config`);
+        const data = await response.json();
+        if (data.provider !== null) {
+          setModelConfig(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch model config:', error);
+      }
+    };
+
+    fetchModelConfig();
+  }, [serverAddress]);
+
+
+  useEffect(() => {
+    setTranscriptModelConfig({
+      provider: 'localWhisper',
+      model: 'large-v3',
+    });
+    const fetchTranscriptSettings = async () => {
+      try {
+        const response = await fetch(`${serverAddress}/get-transcript-config`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.provider !== null) {
+          setTranscriptModelConfig(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transcript settings:', error);
+      }
+    };
+    fetchTranscriptSettings();
+  }, [serverAddress]);
+  
+  
+  
   // Handle model config save
   const handleSaveModelConfig = async (config: ModelConfig) => {
     try {
