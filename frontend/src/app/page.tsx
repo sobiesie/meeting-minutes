@@ -221,8 +221,24 @@ export default function Home() {
       
       if (allNewTranscripts.length > 0) {
         setTranscripts(prev => {
+          // Create a set of existing sequence_ids for deduplication
+          const existingSequenceIds = new Set(prev.map(t => t.sequence_id).filter(id => id !== undefined));
+          
+          // Filter out any new transcripts that already exist
+          const uniqueNewTranscripts = allNewTranscripts.filter(transcript => 
+            transcript.sequence_id !== undefined && !existingSequenceIds.has(transcript.sequence_id)
+          );
+          
+          // Only combine if we have unique new transcripts
+          if (uniqueNewTranscripts.length === 0) {
+            console.log('No unique transcripts to add - all were duplicates');
+            return prev; // No new unique transcripts to add
+          }
+          
+          console.log(`Adding ${uniqueNewTranscripts.length} unique transcripts out of ${allNewTranscripts.length} received`);
+          
           // Merge with existing transcripts, maintaining chronological order
-          const combined = [...prev, ...allNewTranscripts];
+          const combined = [...prev, ...uniqueNewTranscripts];
           
           // Sort by chunk_start_time first, then by sequence_id
           return combined.sort((a, b) => {
@@ -232,6 +248,7 @@ export default function Home() {
           });
         });
         
+        // Log the processing summary
         console.log(`Processed ${allNewTranscripts.length} transcripts (${sortedTranscripts.length} sequential, ${staleTranscripts.length} stale)`);
       }
     };

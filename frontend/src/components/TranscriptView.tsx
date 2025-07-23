@@ -51,7 +51,11 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts }) =
           }`}
         >
           <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-500">{transcript.timestamp}</span>
+            <span className="text-xs text-gray-500">
+              {transcript.chunk_start_time !== undefined 
+                ? `${transcript.chunk_start_time.toFixed(1)}s` 
+                : transcript.timestamp}
+            </span>
             <div className="flex items-center space-x-2">
               {transcript.is_partial && (
                 <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
@@ -70,11 +74,6 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts }) =
           }`}>
             {transcript.text}
           </p>
-          {transcript.chunk_start_time !== undefined && (
-            <span className="text-xs text-gray-400 block mt-1">
-              Chunk: {transcript.chunk_start_time.toFixed(1)}s
-            </span>
-          )}
         </div>
       ))}
       {transcripts.length === 0 && (

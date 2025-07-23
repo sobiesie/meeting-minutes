@@ -68,6 +68,7 @@ struct AudioChunk {
     timestamp: f64,
     chunk_id: u64,
     start_time: std::time::Instant,
+    recording_start_time: std::time::Instant,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +93,7 @@ struct TranscriptAccumulator {
     last_segment_hash: u64,
     current_chunk_id: u64,
     current_chunk_start_time: f64,
+    recording_start_time: Option<std::time::Instant>,
 }
 
 impl TranscriptAccumulator {
@@ -103,12 +105,15 @@ impl TranscriptAccumulator {
             last_segment_hash: 0,
             current_chunk_id: 0,
             current_chunk_start_time: 0.0,
+            recording_start_time: None,
         }
     }
 
-    fn set_chunk_context(&mut self, chunk_id: u64, chunk_start_time: f64) {
+    fn set_chunk_context(&mut self, chunk_id: u64, chunk_start_time: f64, recording_start_time: std::time::Instant) {
         self.current_chunk_id = chunk_id;
         self.current_chunk_start_time = chunk_start_time;
+        // Store recording start time for calculating actual elapsed times
+        self.recording_start_time = Some(recording_start_time);
     }
 
     fn add_segment(&mut self, segment: &TranscriptSegment) -> Option<TranscriptUpdate> {
@@ -162,9 +167,20 @@ impl TranscriptAccumulator {
         if clean_text.ends_with('.') || clean_text.ends_with('?') || clean_text.ends_with('!') {
             let sentence = std::mem::take(&mut self.current_sentence);
             let sequence_id = SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst);
+            
+            // Calculate actual elapsed time from recording start
+            let (start_elapsed, end_elapsed) = if let Some(recording_start) = self.recording_start_time {
+                let sentence_start_elapsed = recording_start.elapsed().as_secs_f32() - (segment.t1 - self.sentence_start_time);
+                let sentence_end_elapsed = recording_start.elapsed().as_secs_f32();
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed)
+            } else {
+                // Fallback to chunk-relative times if recording start time not available
+                (self.sentence_start_time, segment.t1)
+            };
+            
             let update = TranscriptUpdate {
                 text: sentence.trim().to_string(),
-                timestamp: format!("{:.1} - {:.1}", self.sentence_start_time, segment.t1),
+                timestamp: format!("{:.1}s - {:.1}s", start_elapsed, end_elapsed),
                 source: "Mixed Audio".to_string(),
                 sequence_id,
                 chunk_start_time: self.current_chunk_start_time,
@@ -181,11 +197,22 @@ impl TranscriptAccumulator {
         if !self.current_sentence.is_empty() && 
            self.last_update_time.elapsed() > Duration::from_millis(SENTENCE_TIMEOUT_MS) {
             let sentence = std::mem::take(&mut self.current_sentence);
-            let current_time = self.sentence_start_time + (SENTENCE_TIMEOUT_MS as f32 / 1000.0);
             let sequence_id = SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst);
+            
+            // Calculate actual elapsed time from recording start for timeout
+            let (start_elapsed, end_elapsed) = if let Some(recording_start) = self.recording_start_time {
+                let sentence_start_elapsed = recording_start.elapsed().as_secs_f32() - (SENTENCE_TIMEOUT_MS as f32 / 1000.0);
+                let sentence_end_elapsed = recording_start.elapsed().as_secs_f32();
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed)
+            } else {
+                // Fallback to chunk-relative times
+                let current_time = self.sentence_start_time + (SENTENCE_TIMEOUT_MS as f32 / 1000.0);
+                (self.sentence_start_time, current_time)
+            };
+            
             let update = TranscriptUpdate {
                 text: sentence.trim().to_string(),
-                timestamp: format!("{:.1} - {:.1}", self.sentence_start_time, current_time),
+                timestamp: format!("{:.1}s - {:.1}s", start_elapsed, end_elapsed),
                 source: "Mixed Audio".to_string(),
                 sequence_id,
                 chunk_start_time: self.current_chunk_start_time,
@@ -203,6 +230,7 @@ async fn audio_collection_task(
     system_stream: Arc<AudioStream>,
     is_running: Arc<AtomicBool>,
     sample_rate: u32,
+    recording_start_time: std::time::Instant,
 ) -> Result<(), String> {
     log_info!("Audio collection task started");
     
@@ -268,6 +296,7 @@ async fn audio_collection_task(
                 timestamp: chunk_timestamp,
                 chunk_id,
                 start_time: std::time::Instant::now(),
+                recording_start_time,
             };
             
             // Add to queue (with overflow protection)
@@ -397,7 +426,7 @@ async fn transcription_worker<R: Runtime>(
                      worker_id, chunk.chunk_id, chunk.samples.len());
             
             // Set chunk context in accumulator
-            accumulator.set_chunk_context(chunk.chunk_id, chunk.timestamp);
+            accumulator.set_chunk_context(chunk.chunk_id, chunk.timestamp, chunk.recording_start_time);
             
             // Send chunk for transcription
             match send_audio_chunk(chunk.samples, &client, &stream_url).await {
@@ -582,6 +611,11 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     
     log_info!("Mic config: {} Hz, {} channels", sample_rate, channels);
     
+    // Get recording start time for proper elapsed time calculation
+    let recording_start_time = unsafe { 
+        RECORDING_START_TIME.unwrap_or_else(|| std::time::Instant::now()) 
+    };
+    
     // Start audio collection task
     let audio_collection_handle = {
         let mic_stream_clone = mic_stream.clone();
@@ -593,6 +627,7 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
                 system_stream_clone,
                 is_running_clone,
                 sample_rate,
+                recording_start_time,
             ).await {
                 log_error!("Audio collection task error: {}", e);
             }
