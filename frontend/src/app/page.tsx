@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useContext, useCallback } from 'react';
-import { Transcript, Summary, SummaryResponse } from '@/types';
+import { Transcript, TranscriptUpdate, Summary, SummaryResponse } from '@/types';
 import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
 import { RecordingControls } from '@/components/RecordingControls';
@@ -19,11 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Analytics from '@/lib/analytics';
 
 
-interface TranscriptUpdate {
-  text: string;
-  timestamp: string;
-  source: string;
-}
 
 interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude';
@@ -184,32 +179,97 @@ export default function Home() {
 
   useEffect(() => {
     let unlistenFn: (() => void) | undefined;
-    let transcriptCounter = 0;  // Counter for unique IDs
+    let transcriptCounter = 0;
+    let transcriptBuffer = new Map<number, Transcript>();
+    let lastProcessedSequence = 0;
+    let processingTimer: NodeJS.Timeout | undefined;
+
+    const processBufferedTranscripts = () => {
+      const sortedTranscripts: Transcript[] = [];
+      
+      // Process all available sequential transcripts
+      let nextSequence = lastProcessedSequence + 1;
+      while (transcriptBuffer.has(nextSequence)) {
+        const bufferedTranscript = transcriptBuffer.get(nextSequence)!;
+        sortedTranscripts.push(bufferedTranscript);
+        transcriptBuffer.delete(nextSequence);
+        lastProcessedSequence = nextSequence;
+        nextSequence++;
+      }
+
+      // Add any buffered transcripts that might be out of order (older than 5 seconds)
+      const now = Date.now();
+      const staleThreshold = 5000; // 5 seconds
+      const staleTranscripts: Transcript[] = [];
+      
+      for (const [sequenceId, transcript] of transcriptBuffer.entries()) {
+        const transcriptAge = now - parseInt(transcript.id.split('-')[0]);
+        if (transcriptAge > staleThreshold) {
+          staleTranscripts.push(transcript);
+          transcriptBuffer.delete(sequenceId);
+        }
+      }
+      
+      // Sort stale transcripts by chunk_start_time, then by sequence_id
+      staleTranscripts.sort((a, b) => {
+        const chunkTimeDiff = (a.chunk_start_time || 0) - (b.chunk_start_time || 0);
+        if (chunkTimeDiff !== 0) return chunkTimeDiff;
+        return (a.sequence_id || 0) - (b.sequence_id || 0);
+      });
+
+      const allNewTranscripts = [...sortedTranscripts, ...staleTranscripts];
+      
+      if (allNewTranscripts.length > 0) {
+        setTranscripts(prev => {
+          // Merge with existing transcripts, maintaining chronological order
+          const combined = [...prev, ...allNewTranscripts];
+          
+          // Sort by chunk_start_time first, then by sequence_id
+          return combined.sort((a, b) => {
+            const chunkTimeDiff = (a.chunk_start_time || 0) - (b.chunk_start_time || 0);
+            if (chunkTimeDiff !== 0) return chunkTimeDiff;
+            return (a.sequence_id || 0) - (b.sequence_id || 0);
+          });
+        });
+        
+        console.log(`Processed ${allNewTranscripts.length} transcripts (${sortedTranscripts.length} sequential, ${staleTranscripts.length} stale)`);
+      }
+    };
 
     const setupListener = async () => {
       try {
-        console.log('Setting up transcript listener...');
+        console.log('Setting up enhanced transcript listener...');
         unlistenFn = await listen<TranscriptUpdate>('transcript-update', (event) => {
           console.log('Received transcript update:', event.payload);
-          const newTranscript = {
-            id: `${Date.now()}-${transcriptCounter++}`,  // Combine timestamp with counter for uniqueness
+          
+          const newTranscript: Transcript = {
+            id: `${Date.now()}-${transcriptCounter++}`,
             text: event.payload.text,
             timestamp: event.payload.timestamp,
+            sequence_id: event.payload.sequence_id,
+            chunk_start_time: event.payload.chunk_start_time,
+            is_partial: event.payload.is_partial,
           };
-          setTranscripts(prev => {
-            // Check if this transcript already exists
-            const exists = prev.some(
-              t => t.text === event.payload.text && t.timestamp === event.payload.timestamp
-            );
-            if (exists) {
-              console.log('Duplicate transcript, skipping:', newTranscript);
-              return prev;
-            }
-            console.log('Adding new transcript:', newTranscript);
-            return [...prev, newTranscript];
-          });
+
+          // Check for duplicates based on sequence_id
+          if (transcriptBuffer.has(event.payload.sequence_id)) {
+            console.log('Duplicate sequence_id, skipping:', event.payload.sequence_id);
+            return;
+          }
+
+          // Add to buffer
+          transcriptBuffer.set(event.payload.sequence_id, newTranscript);
+          console.log(`Buffered transcript with sequence_id ${event.payload.sequence_id}. Buffer size: ${transcriptBuffer.size}`);
+
+          // Clear any existing timer and set a new one
+          if (processingTimer) {
+            clearTimeout(processingTimer);
+          }
+          
+          // Process buffer after a short delay to allow for batching
+          processingTimer = setTimeout(processBufferedTranscripts, 100);
         });
-        console.log('Transcript listener setup complete');
+        console.log('Enhanced transcript listener setup complete');
       } catch (error) {
         console.error('Failed to setup transcript listener:', error);
         alert('Failed to setup transcript listener. Check console for details.');
@@ -217,10 +277,13 @@ export default function Home() {
     };
 
     setupListener();
-    console.log('Started listener setup');
+    console.log('Started enhanced listener setup');
 
     return () => {
       console.log('Cleaning up transcript listener...');
+      if (processingTimer) {
+        clearTimeout(processingTimer);
+      }
       if (unlistenFn) {
         unlistenFn();
         console.log('Transcript listener cleaned up');
