@@ -111,8 +111,12 @@ class TranscriptProcessor:
                     model_name=model_name, provider=OpenAIProvider(base_url='http://localhost:11434/v1')
                 )
                 llm = ollama_model
-                chunk_size = 5000
-                overlap = 1000
+                if model_name.lower().startswith("phi4") or model_name.lower().startswith("llama"):
+                    chunk_size = 10000
+                    overlap = 1000
+                else:
+                    chunk_size = 30000
+                    overlap = 1000
                 logger.info(f"Using Ollama model: {model_name}")
             elif model == "groq":
                 api_key = await db.get_api_key("groq")
