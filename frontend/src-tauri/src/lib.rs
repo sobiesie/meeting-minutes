@@ -1429,6 +1429,7 @@ pub fn run() {
             api::debug_store_contents,
             api::test_backend_connection,
             api::debug_backend_connection,
+            api::open_external_url,
         ])
         .plugin(tauri_plugin_store::Builder::new().build())
         .run(tauri::generate_context!())

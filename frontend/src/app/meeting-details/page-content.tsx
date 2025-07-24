@@ -770,7 +770,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
                           </svg>
                         </button>
                       </DialogTrigger>
-                      <DialogContent>
+                      <DialogContent
+                      aria-describedby={undefined}
+                      >
                         <VisuallyHidden>
                           <DialogTitle>Model Settings</DialogTitle>
                         </VisuallyHidden>

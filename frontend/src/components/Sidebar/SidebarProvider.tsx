@@ -123,15 +123,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const baseItems: SidebarItem[] = [
-    ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const })),
-    // {
-    //   id: 'meetings',
-    //   title: 'Meetings',
-    //   type: 'folder' as const,
-    //   children: [
-    //     ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
-    //   ]
-    // },
+    {
+      id: 'meetings',
+      title: 'Meeting Notes',
+      type: 'folder' as const,
+      children: [
+        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
+      ]
+    },
   ];
 
  

@@ -161,7 +161,7 @@ While there are many meeting transcription tools available, this solution stands
 ### 1. Frontend Setup
 
 **Option 1: Using the Setup Executable (.exe) (Recommended)**
-1. Download the `meetily-frontend_0.0.4_x64-setup.exe` file
+1. Download the `meetily-frontend_0.0.5_x64-setup.exe` file
 2. Double-click the installer to run it
 3. Follow the on-screen instructions to complete the installation
 4. The application will be available on your desktop
@@ -175,7 +175,7 @@ While there are many meeting transcription tools available, this solution stands
 </p>
 
 **Option 2: Using the MSI Installer (.msi)**
-1. Download the `meetily-frontend_0.0.4_x64_en-US.msi` file
+1. Download the `meetily-frontend_0.0.5_x64_en-US.msi` file
 2. Double-click the MSI file to run it
 3. Follow the installation wizard to complete the setup
 4. The application will be installed and available on your desktop
