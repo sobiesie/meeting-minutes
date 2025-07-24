@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSidebar } from './Sidebar/SidebarProvider';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openai';
@@ -54,19 +55,9 @@ export function ModelSettingsModal({
 
   const fetchApiKey = async (provider: string) => {
     try {
-      const response = await fetch(`${serverAddress}/get-api-key`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ provider }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await invoke('api_get_api_key', {
+        provider,
+      }) as string;
       setApiKey(data || '');
     } catch (err) {
       console.error('Error fetching API key:', err);

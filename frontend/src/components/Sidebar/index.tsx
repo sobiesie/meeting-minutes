@@ -10,6 +10,7 @@ import {  ModelConfig } from '@/components/ModelSettingsModal';
 import { SettingTabs } from '../SettingTabs';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import Analytics from '@/lib/analytics';
+import { invoke } from '@tauri-apps/api/core';
 
 
 import {
@@ -91,9 +92,8 @@ const Sidebar: React.FC = () => {
     });
     const fetchModelConfig = async () => {
       try {
-        const response = await fetch(`${serverAddress}/get-model-config`);
-        const data = await response.json();
-        if (data.provider !== null) {
+        const data = await invoke('api_get_model_config') as any;
+        if (data && data.provider !== null) {
           setModelConfig(data);
         }
       } catch (error) {
@@ -112,12 +112,8 @@ const Sidebar: React.FC = () => {
     });
     const fetchTranscriptSettings = async () => {
       try {
-        const response = await fetch(`${serverAddress}/get-transcript-config`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        if (data.provider !== null) {
+        const data = await invoke('api_get_transcript_config') as any;
+        if (data && data.provider !== null) {
           setTranscriptModelConfig(data);
         }
       } catch (error) {
@@ -132,17 +128,12 @@ const Sidebar: React.FC = () => {
   // Handle model config save
   const handleSaveModelConfig = async (config: ModelConfig) => {
     try {
-      const response = await fetch(`${serverAddress}/save-model-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config),
+      await invoke('api_save_model_config', { 
+        provider: config.provider,
+        model: config.model,
+        whisperModel: config.whisperModel,
+        apiKey: config.apiKey,
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
 
       setModelConfig(config);
       console.log('Model config saved successfully');
@@ -166,23 +157,13 @@ const Sidebar: React.FC = () => {
       };
       console.log('Saving transcript config with payload:', payload);
       
-      const response = await fetch(`${serverAddress}/save-transcript-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
+      await invoke('api_save_transcript_config', {
+        provider: payload.provider,
+        model: payload.model,
+        apiKey: payload.apiKey,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Save transcript config failed:', errorData);
-        console.error('Response status:', response.status);
-        throw new Error(errorData.error || 'Failed to save transcript config');
-      }
-
-      const responseData = await response.json();
-      console.log('Save transcript config success:', responseData);
+      
       setSettingsSaveSuccess(true);
       
       // Track settings change
@@ -278,19 +259,14 @@ const Sidebar: React.FC = () => {
   const handleDelete = async (itemId: string) => {
     console.log('Deleting item:', itemId);
     const payload = {
-      meeting_id: itemId
+      meetingId: itemId
     };
     
-    const response = await fetch(`${serverAddress}/delete-meeting`, {
-      cache: 'no-store',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (response.ok) {
+    try{
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('api_delete_meeting', {
+        meetingId: itemId,
+      });
       console.log('Meeting deleted successfully');
       const updatedMeetings = meetings.filter((m: CurrentMeeting) => m.id !== itemId);
       setMeetings(updatedMeetings);
@@ -303,8 +279,8 @@ const Sidebar: React.FC = () => {
         setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
         router.push('/');
       }
-    } else {
-      console.error('Failed to delete meeting');
+    } catch (error) {
+      console.error('Failed to delete meeting:', error);
     }
   };
   

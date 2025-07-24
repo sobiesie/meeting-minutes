@@ -400,23 +400,10 @@ export default function Home() {
       // Save to SQLite
       if (isCallApi) {
         console.log('Saving transcript to database...', transcripts);
-        const response = await fetch(`${serverAddress}/save-transcript`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            meeting_title: meetingTitle,
-            transcripts: transcripts
-          })
-        });
-
-        if (!response.ok) {
-          setIsRecordingState(false);
-          throw new Error('Failed to save transcript to database');
-        }
-
-        const responseData = await response.json();
+        const responseData = await invoke('api_save_transcript', {
+          meetingTitle: meetingTitle,
+          transcripts: transcripts,
+        }) as any;
         const meetingId = responseData.meeting_id;
         setMeetings([{ id: meetingId, title: meetingTitle }, ...meetings]);
         
@@ -475,46 +462,25 @@ export default function Home() {
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch(`${serverAddress}/process-transcript`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: fullTranscript,
-          model: modelConfig.provider,
-          model_name: modelConfig.model,
-          chunk_size: 40000,
-          overlap: 1000,
-          custom_prompt: prompt,
-        }),
-      });
+      const result = await invoke('api_process_transcript', {
+        text: fullTranscript,
+        model: modelConfig.provider,
+        modelName: modelConfig.model,
+        chunkSize: 40000,
+        overlap: 1000,
+        customPrompt: prompt,
+      }) as any;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Process transcript failed:', errorData);
-        setSummaryError(errorData.error || 'Failed to process transcript');
-        setSummaryStatus('error');
-        return;
-      }
-
-      const { process_id } = await response.json();
+      const process_id = result.process_id;
       console.log('Process ID:', process_id);
    
 
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
-          
-          if (!statusResponse.ok) {
-            const errorData = await statusResponse.json();
-            console.error('Get summary failed:', errorData);
-            setSummaryError(errorData.error || 'Unknown error');
-            setSummaryStatus('error');
-            clearInterval(pollInterval);
-            return;
-          }
-
-          const result = await statusResponse.json();
+          const result = await invoke('api_get_summary', {
+            meetingId: process_id,
+          }) as any;
           console.log('Summary status:', result);
 
           if (result.status === 'error') {
@@ -677,39 +643,23 @@ export default function Home() {
       
       // Process transcript and get process_id
       console.log('Processing transcript...');
-      const response = await fetch(`${serverAddress}/process-transcript`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: originalTranscript,
-          model: modelConfig.provider,
-          model_name: modelConfig.model,
-          chunk_size: 40000,
-          overlap: 1000
-        })
-      });
+      const result = await invoke('api_process_transcript', {
+        text: originalTranscript,
+        model: modelConfig.provider,
+        modelName: modelConfig.model,
+        chunkSize: 40000,
+        overlap: 1000,
+      }) as any;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Process transcript failed:', errorData);
-        throw new Error(errorData.error || 'Failed to process transcript');
-      }
-
-      const { process_id } = await response.json();
+      const process_id = result.process_id;
       console.log('Process ID:', process_id);
 
       // Poll for summary status
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await fetch(`${serverAddress}/get-summary/${process_id}`);
-          
-          if (!statusResponse.ok) {
-            const errorData = await statusResponse.json();
-            console.error('Get summary failed:', errorData);
-            throw new Error(errorData.error || 'Failed to get summary status');
-          }
-
-          const result = await statusResponse.json();
+          const result = await invoke('api_get_summary', {
+            meetingId: process_id,
+          }) as any;
           console.log('Summary status:', result);
 
           if (result.status === 'error') {

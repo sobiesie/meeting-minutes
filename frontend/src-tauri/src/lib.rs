@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub mod audio;
 pub mod ollama;
 pub mod analytics;
+pub mod api;
 
 use audio::{
     default_input_device, default_output_device, AudioStream,
@@ -1099,6 +1100,27 @@ pub fn run() {
             track_summary_regenerated,
             track_model_changed,
             track_custom_prompt_used,
+            api::api_get_meetings,
+            api::api_search_transcripts,
+            api::api_get_profile,
+            api::api_save_profile,
+            api::api_update_profile,
+            api::api_get_model_config,
+            api::api_save_model_config,
+            api::api_get_api_key,
+            api::api_get_transcript_config,
+            api::api_save_transcript_config,
+            api::api_get_transcript_api_key,
+            api::api_delete_meeting,
+            api::api_get_meeting,
+            api::api_save_meeting_title,
+            api::api_save_meeting_summary,
+            api::api_get_summary,
+            api::api_save_transcript,
+            api::api_process_transcript,
+            api::debug_store_contents,
+            api::test_backend_connection,
+            api::debug_backend_connection,
         ])
         .plugin(tauri_plugin_store::Builder::new().build())
         .run(tauri::generate_context!())

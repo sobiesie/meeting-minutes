@@ -5,6 +5,7 @@ import { Transcript, Summary } from "@/types";
 import PageContent from "./page-content";
 import { useRouter } from "next/navigation";
 import Analytics from "@/lib/analytics";
+import { invoke } from "@tauri-apps/api/core";
 
 interface MeetingDetailsResponse {
   id: string;
@@ -48,13 +49,9 @@ export default function MeetingDetails() {
 
     const fetchMeetingDetails = async () => {
       try {
-        const response = await fetch(`${serverAddress}/get-meeting/${currentMeeting.id}`, {
-          cache: 'no-store',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch meeting details');
-        }
-        const data = await response.json();
+        const data = await invoke('api_get_meeting', {
+          meetingId: currentMeeting.id,
+        }) as any;
         console.log('Meeting details:', data);
         setMeetingDetails(data);
       } catch (error) {
@@ -65,13 +62,9 @@ export default function MeetingDetails() {
 
     const fetchMeetingSummary = async () => {
       try {
-        const summaryResponse = await fetch(`${serverAddress}/get-summary/${currentMeeting.id}`, {
-          cache: 'no-store',
-        });
-        if (!summaryResponse.ok) {
-          throw new Error('Failed to fetch meeting summary');
-        }
-        const summary = await summaryResponse.json();
+        const summary = await invoke('api_get_summary', {
+          meetingId: currentMeeting.id,
+        }) as any;
         const summaryData = summary.data || {};
         const { MeetingName, ...restSummaryData } = summaryData;
         const formattedSummary = Object.entries(restSummaryData).reduce((acc: Summary, [key, section]: [string, any]) => {
