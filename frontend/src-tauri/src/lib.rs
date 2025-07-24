@@ -445,8 +445,12 @@ async fn transcription_worker<R: Runtime>(
         }
         // Check for timeout on current sentence
         if let Some(update) = accumulator.check_timeout() {
-            if let Err(e) = app_handle.emit("transcript-update", update) {
+            log_info!("Worker {}: Emitting timeout transcript-update event with sequence_id: {}", worker_id, update.sequence_id);
+            
+            if let Err(e) = app_handle.emit("transcript-update", &update) {
                 log_error!("Worker {}: Failed to send timeout transcript update: {}", worker_id, e);
+            } else {
+                log_info!("Worker {}: Successfully emitted timeout transcript-update event", worker_id);
             }
         }
         
@@ -491,9 +495,13 @@ async fn transcription_worker<R: Runtime>(
                         
                         // Add segment to accumulator and check for complete sentence
                         if let Some(update) = accumulator.add_segment(&segment) {
+                            log_info!("Worker {}: Emitting transcript-update event with sequence_id: {}", worker_id, update.sequence_id);
+                            
                             // Emit the update
-                            if let Err(e) = app_handle.emit("transcript-update", update) {
+                            if let Err(e) = app_handle.emit("transcript-update", &update) {
                                 log_error!("Worker {}: Failed to emit transcript update: {}", worker_id, e);
+                            } else {
+                                log_info!("Worker {}: Successfully emitted transcript-update event", worker_id);
                             }
                         }
                     }
@@ -553,8 +561,12 @@ async fn transcription_worker<R: Runtime>(
     
     // Emit any remaining transcript when worker stops
     if let Some(update) = accumulator.check_timeout() {
-        if let Err(e) = app_handle.emit("transcript-update", update) {
+        log_info!("Worker {}: Emitting final transcript-update event with sequence_id: {}", worker_id, update.sequence_id);
+        
+        if let Err(e) = app_handle.emit("transcript-update", &update) {
             log_error!("Worker {}: Failed to send final transcript update: {}", worker_id, e);
+        } else {
+            log_info!("Worker {}: Successfully emitted final transcript-update event", worker_id);
         }
     }
     
@@ -571,9 +583,12 @@ async fn transcription_worker<R: Runtime>(
             chunk_start_time: accumulator.current_chunk_start_time,
             is_partial: true,
         };
-        log_info!("Worker {}: Flushing final partial sentence: {}", worker_id, update.text);
-        if let Err(e) = app_handle.emit("transcript-update", update) {
+        log_info!("Worker {}: Flushing final partial sentence: {} with sequence_id: {}", worker_id, update.text, update.sequence_id);
+        
+        if let Err(e) = app_handle.emit("transcript-update", &update) {
             log_error!("Worker {}: Failed to send final partial transcript: {}", worker_id, e);
+        } else {
+            log_info!("Worker {}: Successfully emitted final partial transcript-update event", worker_id);
         }
     }
     
