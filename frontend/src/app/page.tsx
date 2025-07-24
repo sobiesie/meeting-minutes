@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Transcript, TranscriptUpdate, Summary, SummaryResponse } from '@/types';
 import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
@@ -68,6 +68,9 @@ export default function Home() {
   const { setCurrentMeeting, setMeetings, meetings, isMeetingActive, setIsMeetingActive, setIsRecording: setSidebarIsRecording , serverAddress} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
+  
+  // Ref for final buffer flush functionality
+  const finalFlushRef = useRef<(() => void) | null>(null);
 
   const modelOptions = {
     ollama: models.map(model => model.name),
@@ -184,7 +187,7 @@ export default function Home() {
     let lastProcessedSequence = 0;
     let processingTimer: NodeJS.Timeout | undefined;
 
-    const processBufferedTranscripts = () => {
+    const processBufferedTranscripts = (forceFlush = false) => {
       const sortedTranscripts: Transcript[] = [];
       
       // Process all available sequential transcripts
@@ -197,27 +200,49 @@ export default function Home() {
         nextSequence++;
       }
 
-      // Add any buffered transcripts that might be out of order (older than 5 seconds)
+      // Add any buffered transcripts that might be out of order
       const now = Date.now();
       const staleThreshold = 5000; // 5 seconds
+      const recentThreshold = 2000; // 2 seconds - for recent out-of-order transcripts
       const staleTranscripts: Transcript[] = [];
+      const recentTranscripts: Transcript[] = [];
+      const forceFlushTranscripts: Transcript[] = [];
       
       for (const [sequenceId, transcript] of transcriptBuffer.entries()) {
-        const transcriptAge = now - parseInt(transcript.id.split('-')[0]);
-        if (transcriptAge > staleThreshold) {
-          staleTranscripts.push(transcript);
+        if (forceFlush) {
+          // Force flush mode: process ALL remaining transcripts regardless of timing
+          forceFlushTranscripts.push(transcript);
           transcriptBuffer.delete(sequenceId);
+          console.log(`Force flush: processing transcript with sequence_id ${sequenceId}`);
+        } else {
+          const transcriptAge = now - parseInt(transcript.id.split('-')[0]);
+          if (transcriptAge > staleThreshold) {
+            // Process truly stale transcripts (>5s old)
+            staleTranscripts.push(transcript);
+            transcriptBuffer.delete(sequenceId);
+          } else if (transcriptAge > recentThreshold) {
+            // Process recent out-of-order transcripts (2-5s old)
+            recentTranscripts.push(transcript);
+            transcriptBuffer.delete(sequenceId);
+            console.log(`Processing recent out-of-order transcript with sequence_id ${sequenceId}, age: ${transcriptAge}ms`);
+          }
         }
       }
       
-      // Sort stale transcripts by chunk_start_time, then by sequence_id
-      staleTranscripts.sort((a, b) => {
-        const chunkTimeDiff = (a.chunk_start_time || 0) - (b.chunk_start_time || 0);
-        if (chunkTimeDiff !== 0) return chunkTimeDiff;
-        return (a.sequence_id || 0) - (b.sequence_id || 0);
-      });
+      // Sort both stale and recent transcripts by chunk_start_time, then by sequence_id
+      const sortTranscripts = (transcripts: Transcript[]) => {
+        return transcripts.sort((a, b) => {
+          const chunkTimeDiff = (a.chunk_start_time || 0) - (b.chunk_start_time || 0);
+          if (chunkTimeDiff !== 0) return chunkTimeDiff;
+          return (a.sequence_id || 0) - (b.sequence_id || 0);
+        });
+      };
 
-      const allNewTranscripts = [...sortedTranscripts, ...staleTranscripts];
+      const sortedStaleTranscripts = sortTranscripts(staleTranscripts);
+      const sortedRecentTranscripts = sortTranscripts(recentTranscripts);
+      const sortedForceFlushTranscripts = sortTranscripts(forceFlushTranscripts);
+
+      const allNewTranscripts = [...sortedTranscripts, ...sortedRecentTranscripts, ...sortedStaleTranscripts, ...sortedForceFlushTranscripts];
       
       if (allNewTranscripts.length > 0) {
         setTranscripts(prev => {
@@ -249,23 +274,37 @@ export default function Home() {
         });
         
         // Log the processing summary
-        console.log(`Processed ${allNewTranscripts.length} transcripts (${sortedTranscripts.length} sequential, ${staleTranscripts.length} stale)`);
+        const logMessage = forceFlush 
+          ? `Force flush processed ${allNewTranscripts.length} transcripts (${sortedTranscripts.length} sequential, ${forceFlushTranscripts.length} forced)`
+          : `Processed ${allNewTranscripts.length} transcripts (${sortedTranscripts.length} sequential, ${recentTranscripts.length} recent, ${staleTranscripts.length} stale)`;
+        console.log(logMessage);
       }
     };
+
+    // Assign final flush function to ref for external access
+    finalFlushRef.current = () => processBufferedTranscripts(true);
 
     const setupListener = async () => {
       try {
         console.log('🔥 Setting up MAIN transcript listener during component initialization...');
         unlistenFn = await listen<TranscriptUpdate>('transcript-update', (event) => {
+          const now = Date.now();
           console.log('🎯 MAIN LISTENER: Received transcript update:', {
             sequence_id: event.payload.sequence_id,
             text: event.payload.text.substring(0, 50) + '...',
             timestamp: event.payload.timestamp,
-            is_partial: event.payload.is_partial
+            is_partial: event.payload.is_partial,
+            received_at: new Date(now).toISOString(),
+            buffer_size_before: transcriptBuffer.size
           });
           
-          // TEMPORARY: Bypass complex buffering and directly add to transcripts
-          console.log('⚡ DIRECT MODE: Adding transcript directly to state');
+          // Check for duplicate sequence_id before processing
+          if (transcriptBuffer.has(event.payload.sequence_id)) {
+            console.log('🚫 MAIN LISTENER: Duplicate sequence_id, skipping buffer:', event.payload.sequence_id);
+            return;
+          }
+
+          // Create transcript for buffer
           const newTranscript: Transcript = {
             id: `${Date.now()}-${transcriptCounter++}`,
             text: event.payload.text,
@@ -274,23 +313,10 @@ export default function Home() {
             chunk_start_time: event.payload.chunk_start_time,
             is_partial: event.payload.is_partial,
           };
-          
-          setTranscripts(prev => {
-            console.log('📊 DIRECT MODE: Current transcript count:', prev.length);
-            const updated = [...prev, newTranscript];
-            console.log('📊 DIRECT MODE: New transcript count:', updated.length);
-            return updated;
-          });
-          
-          // Also keep the buffered version for now
-          if (transcriptBuffer.has(event.payload.sequence_id)) {
-            console.log('🚫 MAIN LISTENER: Duplicate sequence_id, skipping buffer:', event.payload.sequence_id);
-            return;
-          }
 
           // Add to buffer
           transcriptBuffer.set(event.payload.sequence_id, newTranscript);
-          console.log(`✅ MAIN LISTENER: Buffered transcript with sequence_id ${event.payload.sequence_id}. Buffer size: ${transcriptBuffer.size}`);
+          console.log(`✅ MAIN LISTENER: Buffered transcript with sequence_id ${event.payload.sequence_id}. Buffer size: ${transcriptBuffer.size}, Last processed: ${lastProcessedSequence}`);
 
           // Clear any existing timer and set a new one
           if (processingTimer) {
@@ -472,8 +498,12 @@ export default function Home() {
   };
 
   const handleRecordingStop2 = async (isCallApi: boolean) => {
+    const stopStartTime = Date.now();
     try {
-      console.log('Stopping recording (new implementation)...');
+      console.log('Stopping recording (new implementation)...', {
+        stop_initiated_at: new Date(stopStartTime).toISOString(),
+        current_transcript_count: transcripts.length
+      });
       const { invoke } = await import('@tauri-apps/api/core');
       const { appDataDir } = await import('@tauri-apps/api/path');
       const { listen } = await import('@tauri-apps/api/event');
@@ -507,16 +537,7 @@ export default function Home() {
         transcriptionComplete = true;
       });
       
-      // Continue listening for transcript updates even after completion
-      const transcriptListener = await listen<TranscriptUpdate>('transcript-update', (event) => {
-        console.log('🔥 LATE LISTENER: Late transcript update received:', {
-          sequence_id: event.payload.sequence_id,
-          text: event.payload.text.substring(0, 50) + '...',
-          timestamp: event.payload.timestamp,
-          is_partial: event.payload.is_partial
-        });
-        handleTranscriptUpdate(event.payload);
-      });
+      // Removed LATE transcript listener - relying on main buffered transcript system instead
       
       // Poll for transcription status
       while (elapsedTime < MAX_WAIT_TIME && !transcriptionComplete) {
@@ -531,8 +552,8 @@ export default function Home() {
             break;
           }
           
-          // If no activity for more than 5 seconds and no chunks in queue, consider it done
-          if (status.last_activity_ms > 5000 && status.chunks_in_queue === 0) {
+          // If no activity for more than 8 seconds and no chunks in queue, consider it done (increased from 5s to 8s)
+          if (status.last_activity_ms > 8000 && status.chunks_in_queue === 0) {
             console.log('Transcription likely complete - no recent activity and empty queue');
             transcriptionComplete = true;
             break;
@@ -561,14 +582,31 @@ export default function Home() {
         console.warn('⏰ Transcription wait timeout reached after', elapsedTime, 'ms');
       } else {
         console.log('✅ Transcription completed after', elapsedTime, 'ms');
-        // Wait a bit more for any late transcript segments
+        // Wait longer for any late transcript segments (increased from 1s to 4s)
         console.log('⏳ Waiting for late transcript segments...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 4000));
       }
       
-      // Clean up transcript listener
-      console.log('🧹 CLEANUP: Cleaning up LATE transcript listener');
-      transcriptListener();
+      // LATE transcript listener removed - no cleanup needed
+      
+      // Final buffer flush: process ALL remaining transcripts regardless of timing
+      const flushStartTime = Date.now();
+      console.log('🔄 Final buffer flush: forcing processing of any remaining transcripts...', {
+        flush_started_at: new Date(flushStartTime).toISOString(),
+        time_since_stop: flushStartTime - stopStartTime,
+        current_transcript_count: transcripts.length
+      });
+      if (finalFlushRef.current) {
+        finalFlushRef.current();
+        const flushEndTime = Date.now();
+        console.log('✅ Final buffer flush completed', {
+          flush_duration: flushEndTime - flushStartTime,
+          total_time_since_stop: flushEndTime - stopStartTime,
+          final_transcript_count: transcripts.length
+        });
+      } else {
+        console.log('⚠️ Final flush function not available');
+      }
       
       setSummaryStatus('idle');
 
