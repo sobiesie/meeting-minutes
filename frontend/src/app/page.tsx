@@ -255,10 +255,17 @@ export default function Home() {
 
     const setupListener = async () => {
       try {
-        console.log('Setting up enhanced transcript listener...');
+        console.log('🔥 Setting up MAIN transcript listener during component initialization...');
         unlistenFn = await listen<TranscriptUpdate>('transcript-update', (event) => {
-          console.log('Received transcript update:', event.payload);
+          console.log('🎯 MAIN LISTENER: Received transcript update:', {
+            sequence_id: event.payload.sequence_id,
+            text: event.payload.text.substring(0, 50) + '...',
+            timestamp: event.payload.timestamp,
+            is_partial: event.payload.is_partial
+          });
           
+          // TEMPORARY: Bypass complex buffering and directly add to transcripts
+          console.log('⚡ DIRECT MODE: Adding transcript directly to state');
           const newTranscript: Transcript = {
             id: `${Date.now()}-${transcriptCounter++}`,
             text: event.payload.text,
@@ -267,16 +274,23 @@ export default function Home() {
             chunk_start_time: event.payload.chunk_start_time,
             is_partial: event.payload.is_partial,
           };
-
-          // Check for duplicates based on sequence_id
+          
+          setTranscripts(prev => {
+            console.log('📊 DIRECT MODE: Current transcript count:', prev.length);
+            const updated = [...prev, newTranscript];
+            console.log('📊 DIRECT MODE: New transcript count:', updated.length);
+            return updated;
+          });
+          
+          // Also keep the buffered version for now
           if (transcriptBuffer.has(event.payload.sequence_id)) {
-            console.log('Duplicate sequence_id, skipping:', event.payload.sequence_id);
+            console.log('🚫 MAIN LISTENER: Duplicate sequence_id, skipping buffer:', event.payload.sequence_id);
             return;
           }
 
           // Add to buffer
           transcriptBuffer.set(event.payload.sequence_id, newTranscript);
-          console.log(`Buffered transcript with sequence_id ${event.payload.sequence_id}. Buffer size: ${transcriptBuffer.size}`);
+          console.log(`✅ MAIN LISTENER: Buffered transcript with sequence_id ${event.payload.sequence_id}. Buffer size: ${transcriptBuffer.size}`);
 
           // Clear any existing timer and set a new one
           if (processingTimer) {
@@ -286,9 +300,9 @@ export default function Home() {
           // Process buffer after a short delay to allow for batching
           processingTimer = setTimeout(processBufferedTranscripts, 100);
         });
-        console.log('Enhanced transcript listener setup complete');
+        console.log('✅ MAIN transcript listener setup complete');
       } catch (error) {
-        console.error('Failed to setup transcript listener:', error);
+        console.error('❌ Failed to setup MAIN transcript listener:', error);
         alert('Failed to setup transcript listener. Check console for details.');
       }
     };
@@ -297,13 +311,14 @@ export default function Home() {
     console.log('Started enhanced listener setup');
 
     return () => {
-      console.log('Cleaning up transcript listener...');
+      console.log('🧹 CLEANUP: Cleaning up MAIN transcript listener...');
       if (processingTimer) {
         clearTimeout(processingTimer);
+        console.log('🧹 CLEANUP: Cleared processing timer');
       }
       if (unlistenFn) {
         unlistenFn();
-        console.log('Transcript listener cleaned up');
+        console.log('🧹 CLEANUP: MAIN transcript listener cleaned up');
       }
     };
   }, []);
@@ -494,7 +509,12 @@ export default function Home() {
       
       // Continue listening for transcript updates even after completion
       const transcriptListener = await listen<TranscriptUpdate>('transcript-update', (event) => {
-        console.log('Late transcript update received:', event.payload);
+        console.log('🔥 LATE LISTENER: Late transcript update received:', {
+          sequence_id: event.payload.sequence_id,
+          text: event.payload.text.substring(0, 50) + '...',
+          timestamp: event.payload.timestamp,
+          is_partial: event.payload.is_partial
+        });
         handleTranscriptUpdate(event.payload);
       });
       
@@ -534,18 +554,20 @@ export default function Home() {
       }
       
       // Clean up listener
+      console.log('🧹 CLEANUP: Cleaning up transcription-complete listener');
       unlistenComplete();
       
       if (!transcriptionComplete && elapsedTime >= MAX_WAIT_TIME) {
-        console.warn('Transcription wait timeout reached after', elapsedTime, 'ms');
+        console.warn('⏰ Transcription wait timeout reached after', elapsedTime, 'ms');
       } else {
-        console.log('Transcription completed after', elapsedTime, 'ms');
+        console.log('✅ Transcription completed after', elapsedTime, 'ms');
         // Wait a bit more for any late transcript segments
-        console.log('Waiting for late transcript segments...');
+        console.log('⏳ Waiting for late transcript segments...');
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Clean up transcript listener
+      console.log('🧹 CLEANUP: Cleaning up LATE transcript listener');
       transcriptListener();
       
       setSummaryStatus('idle');
@@ -629,25 +651,44 @@ export default function Home() {
   };
 
   const handleTranscriptUpdate = (update: any) => {
-    console.log('Handling transcript update:', update);
+    console.log('🎯 handleTranscriptUpdate called with:', {
+      sequence_id: update.sequence_id,
+      text: update.text.substring(0, 50) + '...',
+      timestamp: update.timestamp,
+      is_partial: update.is_partial
+    });
+    
     const newTranscript = {
       id: update.sequence_id ? update.sequence_id.toString() : Date.now().toString(),
       text: update.text,
       timestamp: update.timestamp,
       sequence_id: update.sequence_id || 0,
     };
+    
     setTranscripts(prev => {
+      console.log('📊 Current transcripts count before update:', prev.length);
+      
       // Check if this transcript already exists
       const exists = prev.some(
         t => t.text === update.text && t.timestamp === update.timestamp
       );
       if (exists) {
-        console.log('Duplicate transcript detected, skipping:', update.text);
+        console.log('🚫 Duplicate transcript detected, skipping:', update.text.substring(0, 30) + '...');
         return prev;
       }
+      
       // Add new transcript and sort by sequence_id to maintain order
       const updated = [...prev, newTranscript];
-      return updated.sort((a, b) => (a.sequence_id || 0) - (b.sequence_id || 0));
+      const sorted = updated.sort((a, b) => (a.sequence_id || 0) - (b.sequence_id || 0));
+      
+      console.log('✅ Added new transcript. New count:', sorted.length);
+      console.log('📝 Latest transcript:', {
+        id: newTranscript.id,
+        text: newTranscript.text.substring(0, 30) + '...',
+        sequence_id: newTranscript.sequence_id
+      });
+      
+      return sorted;
     });
   };
 

@@ -63,56 +63,61 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     Analytics.trackPageView('meeting_details');
   }, []);
 
+  // Combined effect to fetch both model and transcript configs
   useEffect(() => {
+    // Set default configurations
     setModelConfig({
       provider: 'ollama',
       model: 'llama3.2:latest',
       whisperModel: 'large-v3'
     });
-    const fetchModelConfig = async () => {
-      try {
-        const response = await fetch(`${serverAddress}/get-model-config`);
-        const data = await response.json();
-        if (data.provider !== null) {
-          setModelConfig(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch model config:', error);
-      }
-    };
-
-    fetchModelConfig();
-  }, [serverAddress]);
-
-  useEffect(() => {
-    console.log('Model config:', modelConfig);
-  }, [modelConfig]);
-
-  useEffect(() => {
     setTranscriptModelConfig({
       provider: 'localWhisper',
       model: 'large-v3',
     });
-    const fetchTranscriptSettings = async () => {
+
+    const fetchConfigurations = async () => {
+      // Only make API call if serverAddress is loaded
+      if (!serverAddress) {
+        console.log('Waiting for server address to load before fetching configurations');
+        return;
+      }
+      
       try {
-        const response = await fetch(`${serverAddress}/get-transcript-config`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Fetch both configurations in parallel
+        const [modelConfigResponse, transcriptConfigResponse] = await Promise.allSettled([
+          fetch(`${serverAddress}/get-model-config`),
+          fetch(`${serverAddress}/get-transcript-config`)
+        ]);
+
+        // Handle model config response
+        if (modelConfigResponse.status === 'fulfilled' && modelConfigResponse.value.ok) {
+          const modelData = await modelConfigResponse.value.json();
+          if (modelData.provider !== null) {
+            setModelConfig(modelData);
+            console.log('Model config:', modelData);
+          }
+        } else {
+          console.error('Failed to fetch model config');
         }
-        const data = await response.json();
-        if (data.provider !== null) {
-          setTranscriptModelConfig(data);
+
+        // Handle transcript config response
+        if (transcriptConfigResponse.status === 'fulfilled' && transcriptConfigResponse.value.ok) {
+          const transcriptData = await transcriptConfigResponse.value.json();
+          if (transcriptData.provider !== null) {
+            setTranscriptModelConfig(transcriptData);
+            console.log('Transcript settings:', transcriptData);
+          }
+        } else {
+          console.error('Failed to fetch transcript settings');
         }
       } catch (error) {
-        console.error('Failed to fetch transcript settings:', error);
+        console.error('Failed to fetch configurations:', error);
       }
     };
-    fetchTranscriptSettings();
-  }, [serverAddress]);
 
-  useEffect(() => {
-    console.log('Transcript settings:', transcriptModelConfig);
-  }, [transcriptModelConfig]);
+    fetchConfigurations();
+  }, [serverAddress]);
 
   // // Reset settings save success after showing toast
   // useEffect(() => {

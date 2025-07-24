@@ -41,9 +41,9 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts }) =
 
   return (
     <div ref={containerRef} className="h-full overflow-y-auto px-4 py-2">
-      {transcripts?.map((transcript) => (
+      {transcripts?.map((transcript, index) => (
         <div 
-          key={transcript.id} 
+          key={transcript.id ? `${transcript.id}-${index}` : `transcript-${index}`} 
           className={`mb-3 p-3 rounded-lg transition-colors duration-200 ${
             transcript.is_partial 
               ? 'bg-blue-50 border-l-4 border-blue-200' 
