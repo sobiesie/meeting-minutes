@@ -352,7 +352,7 @@ export class Analytics {
         eventName: 'backend_connection',
         properties: {
           success: success.toString(),
-          error: error || null,
+          error: error || '',
           timestamp: new Date().toISOString()
         }
       });

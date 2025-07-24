@@ -90,8 +90,17 @@ const Sidebar: React.FC = () => {
       whisperModel: 'large-v3',
     });
     const fetchModelConfig = async () => {
+      // Only make API call if serverAddress is loaded
+      if (!serverAddress) {
+        console.log('Waiting for server address to load before fetching model config');
+        return;
+      }
+      
       try {
         const response = await fetch(`${serverAddress}/get-model-config`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         if (data.provider !== null) {
           setModelConfig(data);
@@ -111,6 +120,12 @@ const Sidebar: React.FC = () => {
       model: 'large-v3',
     });
     const fetchTranscriptSettings = async () => {
+      // Only make API call if serverAddress is loaded
+      if (!serverAddress) {
+        console.log('Waiting for server address to load before fetching transcript settings');
+        return;
+      }
+      
       try {
         const response = await fetch(`${serverAddress}/get-transcript-config`);
         if (!response.ok) {
