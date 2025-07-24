@@ -215,6 +215,14 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, blockId: string) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedBlocks.length > 1) {
+      // Handle multi-block deletion
+      e.preventDefault();
+      handleDeleteSelectedBlocks();
+    }
+  };
+
+  const handleCreateNewBlock = (blockId: string, newBlockContent: string, blockType: Block['type'], currentBlockContent?: string) => {
     // Find the section key for this block
     let blockSectionKey: string | null = null;
     let currentBlockIndex = -1;
@@ -229,63 +237,53 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
 
     if (!blockSectionKey) return;
 
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const currentBlock = currentSummary[blockSectionKey].blocks[currentBlockIndex];
-      
-      if (!currentBlock) return;
-      
-      const newId = generateUniqueId(blockSectionKey);
-      const textarea = e.target as HTMLTextAreaElement;
-      const newBlockContent = textarea.dataset.newBlockContent || '';
-      
-      // Update the blocks array for the specific section
-      const updatedBlocks = [...currentSummary[blockSectionKey].blocks];
-      
-      // Get the type of the current block for the new block
-      const newBlockType = currentBlock.type === 'bullet' ? 'bullet' : 'text';
-      
-      // Insert new block after current block
-      updatedBlocks.splice(currentBlockIndex + 1, 0, {
-        id: newId,
-        type: newBlockType,
-        content: newBlockContent,
-        color: currentBlock.color || 'default'
-      });
-      
-      onSummaryChange({
-        ...currentSummary,
-        [blockSectionKey]: {
-          ...currentSummary[blockSectionKey],
-          blocks: updatedBlocks
-        }
-      });
-      
-      // Focus and select the new block
-      setSelectedBlocks([newId]);
-      setLastSelectedBlock(newId);
-      
-      // Use setTimeout to ensure the textarea is mounted
-      setTimeout(() => {
-        const newTextarea = document.querySelector(`[data-block-id="${newId}"]`) as HTMLTextAreaElement;
-        if (newTextarea) {
-          newTextarea.focus();
-          newTextarea.setSelectionRange(0, 0);
-        }
-      }, 0);
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedBlocks.length > 1) {
-      e.preventDefault();
-      handleDeleteSelectedBlocks();
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      const cursorPosition = (e.target as HTMLTextAreaElement).selectionStart;
-      const isAtStart = cursorPosition === 0;
-      const isAtEnd = cursorPosition === (e.target as HTMLTextAreaElement).value.length;
-
-      if ((e.key === 'ArrowUp' && isAtStart) || (e.key === 'ArrowDown' && isAtEnd)) {
-        e.preventDefault();
-        handleBlockNavigate(blockId, e.key === 'ArrowUp' ? 'up' : 'down');
-      }
+    const currentBlock = currentSummary[blockSectionKey].blocks[currentBlockIndex];
+    if (!currentBlock) return;
+    
+    const newId = generateUniqueId(blockSectionKey);
+    
+    // Update the blocks array for the specific section
+    const updatedBlocks = [...currentSummary[blockSectionKey].blocks];
+    
+    // Get the type of the new block (inherit from current block for bullets)
+    const newBlockType = blockType === 'bullet' ? 'bullet' : 'text';
+    
+    // Update the current block's content if provided
+    if (currentBlockContent !== undefined) {
+      updatedBlocks[currentBlockIndex] = {
+        ...currentBlock,
+        content: currentBlockContent
+      };
     }
+    
+    // Insert new block after current block
+    updatedBlocks.splice(currentBlockIndex + 1, 0, {
+      id: newId,
+      type: newBlockType,
+      content: newBlockContent,
+      color: currentBlock.color || 'default'
+    });
+    
+    onSummaryChange({
+      ...currentSummary,
+      [blockSectionKey]: {
+        ...currentSummary[blockSectionKey],
+        blocks: updatedBlocks
+      }
+    });
+    
+    // Focus and select the new block
+    setSelectedBlocks([newId]);
+    setLastSelectedBlock(newId);
+    
+    // Use setTimeout to ensure the textarea is mounted
+    setTimeout(() => {
+      const newTextarea = document.querySelector(`[data-block-id="${newId}"]`) as HTMLTextAreaElement;
+      if (newTextarea) {
+        newTextarea.focus();
+        newTextarea.setSelectionRange(0, 0);
+      }
+    }, 0);
   };
 
   const handleBlockDelete = (blockId: string, mergeContent?: string) => {
@@ -473,9 +471,36 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    const menuWidth = 160;
+    const menuHeight = 80; // Approximate height for 2 items
+    
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Check right boundary
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    
+    // Check bottom boundary
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    // Check left boundary
+    if (x < 10) {
+      x = 10;
+    }
+    
+    // Check top boundary
+    if (y < 10) {
+      y = 10;
+    }
+    
     setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       visible: true
     });
   };
@@ -604,7 +629,9 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     return renderLoadingState();
   }
 
-  const hasContent = Object.values(currentSummary).some(section => section?.blocks?.length > 0);
+  const hasContent = Object.values(currentSummary).some(section => 
+    section?.blocks?.length > 0 && section?.blocks?.some(block => block.content.trim())
+  );
 
   if (!hasContent && status === 'completed') {
     return (
@@ -632,11 +659,11 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
       {/* Context Menu */}
       {contextMenu.visible && selectedBlocks.length > 0 && (
         <div
-          className="fixed z-50 bg-white shadow-lg rounded-lg py-1 min-w-[160px] border border-gray-200"
+          className="fixed z-50 bg-white shadow-lg rounded-lg py-1 min-w-[160px] border border-gray-200
+                     animate-in fade-in zoom-in-95 duration-150"
           style={{ 
             left: contextMenu.x, 
-            top: contextMenu.y,
-            transform: 'translate(-50%, -50%)'
+            top: contextMenu.y
           }}
           onClick={e => e.stopPropagation()}
         >
@@ -750,7 +777,9 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
         </div>
       </div>
 
-      {Object.entries(currentSummary).map(([key, section]) => (
+      {Object.entries(currentSummary)
+        .filter(([key, section]) => section?.blocks?.length > 0 && section?.blocks?.some(block => block.content.trim()))
+        .map(([key, section]) => (
         <Section
           key={key}
           section={section}
@@ -767,6 +796,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
           onBlockDelete={(blockId, mergeContent) => handleBlockDelete(blockId, mergeContent)}
           onContextMenu={handleContextMenu}
           onBlockNavigate={(blockId, direction) => handleBlockNavigate(blockId, direction)}
+          onCreateNewBlock={handleCreateNewBlock}
         />
       ))}
     </div>

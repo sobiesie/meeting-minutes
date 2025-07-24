@@ -46,8 +46,8 @@ export default function MeetingDetails() {
     let isActive = true;
 
     const fetchMeetingData = async () => {
-      let detailsResponse: PromiseSettledResult<Response>;
-      let summaryResponse: PromiseSettledResult<Response>;
+      let detailsResponse: PromiseSettledResult<Response> | undefined;
+      let summaryResponse: PromiseSettledResult<Response> | undefined;
       
       try {
         // Fetch meeting details
@@ -122,8 +122,8 @@ export default function MeetingDetails() {
         console.error('Error fetching meeting data:', error);
         if (isActive) {
           // Only set error for critical failures (meeting details), not summary failures
-          if (detailsResponse.status === 'rejected' || 
-              (detailsResponse.status === 'fulfilled' && !detailsResponse.value.ok)) {
+          if (detailsResponse && (detailsResponse.status === 'rejected' || 
+              (detailsResponse.status === 'fulfilled' && !detailsResponse.value.ok))) {
             setError("Failed to load meeting details");
           } else {
             // Meeting details loaded successfully, just log summary issue

@@ -21,6 +21,7 @@ interface SectionProps {
   onBlockDelete: (blockId: string, mergeContent?: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onBlockNavigate?: (blockId: string, direction: 'up' | 'down', cursorPosition: number) => void;
+  onCreateNewBlock?: (blockId: string, newBlockContent: string, blockType: Block['type']) => void;
 }
 
 export const Section: React.FC<SectionProps> = ({
@@ -38,6 +39,7 @@ export const Section: React.FC<SectionProps> = ({
   onBlockDelete,
   onContextMenu,
   onBlockNavigate,
+  onCreateNewBlock,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +114,7 @@ export const Section: React.FC<SectionProps> = ({
               onNavigate={onBlockNavigate ? 
                 (direction, cursorPosition) => onBlockNavigate(block.id, direction, cursorPosition)
                 : undefined}
+              onCreateNewBlock={onCreateNewBlock}
             />
           </motion.div>
         ))}
