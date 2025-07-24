@@ -32,9 +32,6 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
-  const [stopCountdown, setStopCountdown] = useState(5);
-  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
-  const stopTimeoutRef = useRef<{ stop: () => void } | null>(null);
   const MIN_RECORDING_DURATION = 2000; // 2 seconds minimum recording time
   const [transcriptionErrors, setTranscriptionErrors] = useState(0);
 
@@ -134,58 +131,16 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || isStarting || isStopping) return;
     
-    console.log('Starting stop countdown...');
+    console.log('Stopping recording...');
     setIsStopping(true);
-    setStopCountdown(5);
-
-    // Clear any existing intervals
-    if (countdownInterval.current) {
-      clearInterval(countdownInterval.current);
-      countdownInterval.current = null;
-    }
-
-    // Create a controller for the stop action
-    const controller = {
-      stop: () => {
-        if (countdownInterval.current) {
-          clearInterval(countdownInterval.current);
-          countdownInterval.current = null;
-        }
-        setIsStopping(false);
-        setStopCountdown(5);
-      }
-    };
-    stopTimeoutRef.current = controller;
-
-    // Start countdown
-    countdownInterval.current = setInterval(() => {
-      setStopCountdown(prev => {
-        if (prev <= 1) {
-          // Clear interval first
-          if (countdownInterval.current) {
-            clearInterval(countdownInterval.current);
-            countdownInterval.current = null;
-          }
-          // Schedule stop action
-          stopRecordingAction();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    
+    // Immediately trigger the stop action
+    await stopRecordingAction();
   }, [isRecording, isStarting, isStopping, stopRecordingAction]);
-
-  const cancelStopRecording = useCallback(() => {
-    if (stopTimeoutRef.current) {
-      stopTimeoutRef.current.stop();
-              stopTimeoutRef.current = null;
-      }
-    }, []);
 
   useEffect(() => {
     return () => {
-      if (countdownInterval.current) clearInterval(countdownInterval.current);
-      if (stopTimeoutRef.current) stopTimeoutRef.current.stop();
+      // Cleanup on unmount if needed
     };
   }, []);
 
@@ -282,21 +237,16 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                 <button
                   onClick={() => {
                     if (isRecording) {
-                      if (isStopping) {
-                        Analytics.trackButtonClick('cancel_stop_recording', 'recording_controls');
-                        cancelStopRecording();
-                      } else {
-                        Analytics.trackButtonClick('stop_recording', 'recording_controls');
-                        handleStopRecording();
-                      }
+                      Analytics.trackButtonClick('stop_recording', 'recording_controls');
+                      handleStopRecording();
                     } else {
                       Analytics.trackButtonClick('start_recording', 'recording_controls');
                       handleStartRecording();
                     }
                   }}
-                  disabled={isStarting || isProcessing}
+                  disabled={isStarting || isProcessing || isStopping}
                   className={`w-12 h-12 flex items-center justify-center ${
-                    isStarting || isProcessing ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'
+                    isStarting || isProcessing || isStopping ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'
                   } rounded-full text-white transition-colors relative`}
 
                 >
@@ -304,8 +254,8 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                     <>
                       <Square size={20} />
                       {isStopping && (
-                        <div className="absolute -top-8 text-red-500 font-medium">
-                          {stopCountdown > 0 ? `${stopCountdown}s` : 'Stopping...'}
+                        <div className="absolute -top-8 text-gray-600 font-medium text-sm">
+                          Stopping...
                         </div>
                       )}
                     </>

@@ -35,6 +35,8 @@ static mut TRANSCRIPTION_TASK: Option<tokio::task::JoinHandle<()>> = None;
 static mut AUDIO_COLLECTION_TASK: Option<tokio::task::JoinHandle<()>> = None;
 static mut ANALYTICS_CLIENT: Option<Arc<AnalyticsClient>> = None;
 static mut ERROR_EVENT_EMITTED: bool = false;
+static LAST_TRANSCRIPTION_ACTIVITY: AtomicU64 = AtomicU64::new(0);
+static ACTIVE_WORKERS: AtomicU64 = AtomicU64::new(0);
 
 // Audio configuration constants
 const CHUNK_DURATION_MS: u32 = 30000; // 30 seconds per chunk for better sentence processing
@@ -50,6 +52,13 @@ const MAX_AUDIO_QUEUE_SIZE: usize = 10; // Maximum number of chunks in queue
 #[derive(Debug, Deserialize)]
 struct RecordingArgs {
     save_path: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct TranscriptionStatus {
+    chunks_in_queue: usize,
+    is_processing: bool,
+    last_activity_ms: u64,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -144,10 +153,12 @@ impl TranscriptAccumulator {
         segment.text.hash(&mut hasher);
         segment.t0.to_bits().hash(&mut hasher);
         segment.t1.to_bits().hash(&mut hasher);
+        self.current_chunk_id.hash(&mut hasher); // Include chunk ID to avoid cross-chunk duplicates
         let segment_hash = hasher.finish();
 
         // Skip if this is a duplicate segment
         if segment_hash == self.last_segment_hash {
+            log_info!("Skipping duplicate segment: {}", clean_text);
             return None;
         }
         self.last_segment_hash = segment_hash;
@@ -163,19 +174,25 @@ impl TranscriptAccumulator {
         }
         self.current_sentence.push_str(&clean_text);
 
-        // Check if we have a complete sentence
-        if clean_text.ends_with('.') || clean_text.ends_with('?') || clean_text.ends_with('!') {
+        // Check if we have a complete sentence (including common sentence endings)
+        let has_sentence_ending = clean_text.ends_with('.') || clean_text.ends_with('?') || clean_text.ends_with('!') ||
+                                  clean_text.ends_with("...") || clean_text.ends_with(".\"") || clean_text.ends_with(".'");
+        
+        if has_sentence_ending {
             let sentence = std::mem::take(&mut self.current_sentence);
             let sequence_id = SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst);
             
             // Calculate actual elapsed time from recording start
             let (start_elapsed, end_elapsed) = if let Some(recording_start) = self.recording_start_time {
-                let sentence_start_elapsed = recording_start.elapsed().as_secs_f32() - (segment.t1 - self.sentence_start_time);
-                let sentence_end_elapsed = recording_start.elapsed().as_secs_f32();
-                (sentence_start_elapsed.max(0.0), sentence_end_elapsed)
+                // Calculate when this sentence actually started and ended relative to recording start
+                let sentence_start_elapsed = self.current_chunk_start_time + (self.sentence_start_time as f64 / 1000.0);
+                let sentence_end_elapsed = self.current_chunk_start_time + (segment.t1 as f64 / 1000.0);
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed.max(0.0))
             } else {
                 // Fallback to chunk-relative times if recording start time not available
-                (self.sentence_start_time, segment.t1)
+                let sentence_start_elapsed = self.current_chunk_start_time + (self.sentence_start_time as f64 / 1000.0);
+                let sentence_end_elapsed = self.current_chunk_start_time + (segment.t1 as f64 / 1000.0);
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed.max(0.0))
             };
             
             let update = TranscriptUpdate {
@@ -201,13 +218,15 @@ impl TranscriptAccumulator {
             
             // Calculate actual elapsed time from recording start for timeout
             let (start_elapsed, end_elapsed) = if let Some(recording_start) = self.recording_start_time {
-                let sentence_start_elapsed = recording_start.elapsed().as_secs_f32() - (SENTENCE_TIMEOUT_MS as f32 / 1000.0);
-                let sentence_end_elapsed = recording_start.elapsed().as_secs_f32();
-                (sentence_start_elapsed.max(0.0), sentence_end_elapsed)
+                // For timeout, we know the sentence started at sentence_start_time and is timing out now
+                let sentence_start_elapsed = self.current_chunk_start_time + (self.sentence_start_time as f64 / 1000.0);
+                let sentence_end_elapsed = sentence_start_elapsed + (SENTENCE_TIMEOUT_MS as f64 / 1000.0);
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed.max(0.0))
             } else {
                 // Fallback to chunk-relative times
-                let current_time = self.sentence_start_time + (SENTENCE_TIMEOUT_MS as f32 / 1000.0);
-                (self.sentence_start_time, current_time)
+                let sentence_start_elapsed = self.current_chunk_start_time + (self.sentence_start_time as f64 / 1000.0);
+                let sentence_end_elapsed = sentence_start_elapsed + (SENTENCE_TIMEOUT_MS as f64 / 1000.0);
+                (sentence_start_elapsed.max(0.0), sentence_end_elapsed.max(0.0))
             };
             
             let update = TranscriptUpdate {
@@ -394,13 +413,36 @@ async fn transcription_worker<R: Runtime>(
     log_info!("Transcription worker {} started", worker_id);
     let mut accumulator = TranscriptAccumulator::new();
     
-    while unsafe { 
-        if let Some(is_running) = &IS_RUNNING {
-            is_running.load(Ordering::SeqCst)
-        } else {
-            false
+    // Increment active worker count
+    ACTIVE_WORKERS.fetch_add(1, Ordering::SeqCst);
+    
+    // Worker continues until both recording is stopped AND queue is empty
+    loop {
+        let is_running = unsafe { 
+            if let Some(is_running) = &IS_RUNNING {
+                is_running.load(Ordering::SeqCst)
+            } else {
+                false
+            }
+        };
+        
+        let queue_has_chunks = unsafe {
+            if let Some(queue) = &AUDIO_CHUNK_QUEUE {
+                if let Ok(queue_guard) = queue.lock() {
+                    !queue_guard.is_empty()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+        
+        // Continue if recording is active OR if there are still chunks to process
+        if !is_running && !queue_has_chunks {
+            log_info!("Worker {}: Recording stopped and no more chunks to process, exiting", worker_id);
+            break;
         }
-    } {
         // Check for timeout on current sentence
         if let Some(update) = accumulator.check_timeout() {
             if let Err(e) = app_handle.emit("transcript-update", update) {
@@ -424,6 +466,15 @@ async fn transcription_worker<R: Runtime>(
         if let Some(chunk) = audio_chunk {
             log_info!("Worker {}: Processing chunk {} with {} samples", 
                      worker_id, chunk.chunk_id, chunk.samples.len());
+            
+            // Update last activity timestamp
+            LAST_TRANSCRIPTION_ACTIVITY.store(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                Ordering::SeqCst
+            );
             
             // Set chunk context in accumulator
             accumulator.set_chunk_context(chunk.chunk_id, chunk.timestamp, chunk.recording_start_time);
@@ -507,6 +558,55 @@ async fn transcription_worker<R: Runtime>(
         }
     }
     
+    // Also flush any partial sentence that might not have been emitted
+    if !accumulator.current_sentence.is_empty() {
+        let sequence_id = SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let update = TranscriptUpdate {
+            text: accumulator.current_sentence.trim().to_string(),
+            timestamp: format!("{:.1}s - {:.1}s", 
+                accumulator.current_chunk_start_time + (accumulator.sentence_start_time as f64 / 1000.0),
+                accumulator.current_chunk_start_time + (accumulator.sentence_start_time as f64 / 1000.0) + 1.0),
+            source: "Mixed Audio".to_string(),
+            sequence_id,
+            chunk_start_time: accumulator.current_chunk_start_time,
+            is_partial: true,
+        };
+        log_info!("Worker {}: Flushing final partial sentence: {}", worker_id, update.text);
+        if let Err(e) = app_handle.emit("transcript-update", update) {
+            log_error!("Worker {}: Failed to send final partial transcript: {}", worker_id, e);
+        }
+    }
+    
+    // Decrement active worker count
+    ACTIVE_WORKERS.fetch_sub(1, Ordering::SeqCst);
+    
+    // Check if this was the last active worker and emit completion event
+    if ACTIVE_WORKERS.load(Ordering::SeqCst) == 0 {
+        let should_emit = unsafe {
+            if let Some(queue) = &AUDIO_CHUNK_QUEUE {
+                if let Ok(queue_guard) = queue.lock() {
+                    queue_guard.is_empty()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+        
+        if should_emit {
+            log_info!("All workers finished and queue is empty, waiting for pending segments...");
+            
+            // Wait a bit to ensure all pending segments are emitted
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            
+            log_info!("Emitting transcription-complete event");
+            if let Err(e) = app_handle.emit("transcription-complete", ()) {
+                log_error!("Failed to emit transcription-complete event: {}", e);
+            }
+        }
+    }
+    
     log_info!("Transcription worker {} ended", worker_id);
 }
 
@@ -537,10 +637,14 @@ async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     RECORDING_FLAG.store(true, Ordering::SeqCst);
     log_info!("Recording flag set to true");
     
-    // Reset error event flag for new recording session
+    // Reset error event flag and activity tracking for new recording session
     unsafe {
         ERROR_EVENT_EMITTED = false;
     }
+    
+    // Reset transcription activity tracking
+    LAST_TRANSCRIPTION_ACTIVITY.store(0, Ordering::SeqCst);
+    ACTIVE_WORKERS.store(0, Ordering::SeqCst);
 
 
     // Store recording start time
@@ -708,12 +812,51 @@ async fn stop_recording(args: RecordingArgs) -> Result<(), String> {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
             
-            // Stop the transcription task
-            if let Some(task) = TRANSCRIPTION_TASK.take() {
-                log_info!("Stopping transcription task...");
-                task.abort();
-                // Give the task time to clean up
-                tokio::time::sleep(Duration::from_millis(100)).await;
+            // Wait for transcription workers to complete processing remaining chunks
+            if TRANSCRIPTION_TASK.is_some() {
+                log_info!("Waiting for transcription workers to complete...");
+                
+                // Wait for all workers to finish processing remaining chunks
+                let mut wait_time = 0;
+                const MAX_WAIT_TIME: u64 = 30000; // 30 seconds max
+                const CHECK_INTERVAL: u64 = 100; // Check every 100ms
+                
+                while wait_time < MAX_WAIT_TIME {
+                    let active_count = ACTIVE_WORKERS.load(Ordering::SeqCst);
+                    let queue_size = unsafe {
+                        if let Some(queue) = &AUDIO_CHUNK_QUEUE {
+                            if let Ok(queue_guard) = queue.lock() {
+                                queue_guard.len()
+                            } else {
+                                0
+                            }
+                        } else {
+                            0
+                        }
+                    };
+                    
+                    log_info!("Worker cleanup status: {} active workers, {} chunks in queue", active_count, queue_size);
+                    
+                    // If no active workers and queue is empty, we're done
+                    if active_count == 0 && queue_size == 0 {
+                        log_info!("All workers completed and queue is empty");
+                        break;
+                    }
+                    
+                    tokio::time::sleep(Duration::from_millis(CHECK_INTERVAL)).await;
+                    wait_time += CHECK_INTERVAL;
+                }
+                
+                if wait_time >= MAX_WAIT_TIME {
+                    log_error!("Transcription worker cleanup timeout after {} seconds", MAX_WAIT_TIME / 1000);
+                }
+                
+                // Now stop the transcription task
+                if let Some(task) = TRANSCRIPTION_TASK.take() {
+                    log_info!("Stopping transcription task...");
+                    task.abort();
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
             }
             
             // Give the tokio task time to finish and release its references
@@ -889,6 +1032,40 @@ async fn stop_recording(args: RecordingArgs) -> Result<(), String> {
 #[tauri::command]
 fn is_recording() -> bool {
     RECORDING_FLAG.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+fn get_transcription_status() -> TranscriptionStatus {
+    let chunks_in_queue = unsafe {
+        if let Some(queue) = &AUDIO_CHUNK_QUEUE {
+            if let Ok(queue_guard) = queue.lock() {
+                queue_guard.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    };
+    
+    let is_processing = ACTIVE_WORKERS.load(Ordering::SeqCst) > 0 || chunks_in_queue > 0;
+    
+    let last_activity_ms = LAST_TRANSCRIPTION_ACTIVITY.load(Ordering::SeqCst);
+    let current_time_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let elapsed_since_activity = if last_activity_ms > 0 {
+        current_time_ms.saturating_sub(last_activity_ms)
+    } else {
+        u64::MAX
+    };
+    
+    TranscriptionStatus {
+        chunks_in_queue,
+        is_processing,
+        last_activity_ms: elapsed_since_activity,
+    }
 }
 
 #[tauri::command]
@@ -1191,6 +1368,7 @@ pub fn run() {
             start_recording,
             stop_recording,
             is_recording,
+            get_transcription_status,
             read_audio_file,
             save_transcript,
             init_analytics,

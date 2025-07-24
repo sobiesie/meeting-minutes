@@ -461,6 +461,7 @@ export default function Home() {
       console.log('Stopping recording (new implementation)...');
       const { invoke } = await import('@tauri-apps/api/core');
       const { appDataDir } = await import('@tauri-apps/api/path');
+      const { listen } = await import('@tauri-apps/api/event');
       
       const dataDir = await appDataDir();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -476,10 +477,102 @@ export default function Home() {
       });
       console.log('Recording stopped successfully');
       
+      // Wait for transcription to complete
+      setSummaryStatus('processing');
+      console.log('Waiting for transcription to complete...');
+      
+      const MAX_WAIT_TIME = 60000; // 60 seconds maximum wait (increased for longer processing)
+      const POLL_INTERVAL = 500; // Check every 500ms
+      let elapsedTime = 0;
+      let transcriptionComplete = false;
+      
+      // Listen for transcription-complete event
+      const unlistenComplete = await listen('transcription-complete', () => {
+        console.log('Received transcription-complete event');
+        transcriptionComplete = true;
+      });
+      
+      // Continue listening for transcript updates even after completion
+      const transcriptListener = await listen<TranscriptUpdate>('transcript-update', (event) => {
+        console.log('Late transcript update received:', event.payload);
+        handleTranscriptUpdate(event.payload);
+      });
+      
+      // Poll for transcription status
+      while (elapsedTime < MAX_WAIT_TIME && !transcriptionComplete) {
+        try {
+          const status = await invoke<{chunks_in_queue: number, is_processing: boolean, last_activity_ms: number}>('get_transcription_status');
+          console.log('Transcription status:', status);
+          
+          // Check if transcription is complete
+          if (!status.is_processing && status.chunks_in_queue === 0) {
+            console.log('Transcription complete - no active processing and no chunks in queue');
+            transcriptionComplete = true;
+            break;
+          }
+          
+          // If no activity for more than 5 seconds and no chunks in queue, consider it done
+          if (status.last_activity_ms > 5000 && status.chunks_in_queue === 0) {
+            console.log('Transcription likely complete - no recent activity and empty queue');
+            transcriptionComplete = true;
+            break;
+          }
+          
+          // Update user with current status
+          if (status.chunks_in_queue > 0) {
+            console.log(`Processing ${status.chunks_in_queue} remaining audio chunks...`);
+            setSummaryStatus('processing');
+          }
+          
+          // Wait before next check
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+          elapsedTime += POLL_INTERVAL;
+        } catch (error) {
+          console.error('Error checking transcription status:', error);
+          break;
+        }
+      }
+      
+      // Clean up listener
+      unlistenComplete();
+      
+      if (!transcriptionComplete && elapsedTime >= MAX_WAIT_TIME) {
+        console.warn('Transcription wait timeout reached after', elapsedTime, 'ms');
+      } else {
+        console.log('Transcription completed after', elapsedTime, 'ms');
+        // Wait a bit more for any late transcript segments
+        console.log('Waiting for late transcript segments...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Clean up transcript listener
+      transcriptListener();
+      
+      setSummaryStatus('idle');
+
+      // Wait a bit more to ensure all transcript state updates have been processed
+      console.log('Waiting for transcript state updates to complete...');
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Save to SQLite
       if (isCallApi) {
-        console.log('Saving transcript to database...', transcripts);
+        // Get the most current transcript data from state
+        const currentTranscripts = await new Promise<typeof transcripts>((resolve) => {
+          setTranscripts(prev => {
+            resolve(prev);
+            return prev;
+          });
+        });
+        
+        console.log('Saving transcript to database...');
+        console.log('Current transcript count:', currentTranscripts.length);
+        console.log('Transcript data:', currentTranscripts);
+        
+        if (currentTranscripts.length === 0) {
+          console.warn('No transcripts to save! This might indicate a timing issue.');
+          console.warn('Original transcripts var:', transcripts);
+        }
+        
         const response = await fetch(`${serverAddress}/save-transcript`, {
           method: 'POST',
           headers: {
@@ -487,20 +580,35 @@ export default function Home() {
           },
           body: JSON.stringify({
             meeting_title: meetingTitle,
-            transcripts: transcripts
+            transcripts: currentTranscripts
           })
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Save transcript failed:', response.status, errorText);
           setIsRecordingState(false);
-          throw new Error('Failed to save transcript to database');
+          throw new Error(`Failed to save transcript to database: ${response.status} ${errorText}`);
         }
 
         const responseData = await response.json();
+        console.log('Save transcript response:', responseData);
+        
         const meetingId = responseData.meeting_id;
+        if (!meetingId) {
+          console.error('No meeting_id in response:', responseData);
+          throw new Error('No meeting ID received from save operation');
+        }
+        
+        console.log('Successfully saved transcript with meeting ID:', meetingId);
         setMeetings([{ id: meetingId, title: meetingTitle }, ...meetings]);
         
+        // Wait a moment to ensure backend has fully processed the save
+        console.log('Waiting for backend processing to complete...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Set current meeting and navigate
+        console.log('Setting current meeting and navigating to details page');
         setCurrentMeeting({ id: meetingId, title: meetingTitle });
         setIsMeetingActive(false);
         router.push('/meeting-details');
@@ -516,15 +624,17 @@ export default function Home() {
     } catch (error) {
       console.error('Error in handleRecordingStop2:', error);
       setIsRecordingState(false);
+      setSummaryStatus('idle');
     }
   };
 
   const handleTranscriptUpdate = (update: any) => {
     console.log('Handling transcript update:', update);
     const newTranscript = {
-      id: Date.now().toString(),
+      id: update.sequence_id ? update.sequence_id.toString() : Date.now().toString(),
       text: update.text,
       timestamp: update.timestamp,
+      sequence_id: update.sequence_id || 0,
     };
     setTranscripts(prev => {
       // Check if this transcript already exists
@@ -532,9 +642,12 @@ export default function Home() {
         t => t.text === update.text && t.timestamp === update.timestamp
       );
       if (exists) {
+        console.log('Duplicate transcript detected, skipping:', update.text);
         return prev;
       }
-      return [...prev, newTranscript];
+      // Add new transcript and sort by sequence_id to maintain order
+      const updated = [...prev, newTranscript];
+      return updated.sort((a, b) => (a.sequence_id || 0) - (b.sequence_id || 0));
     });
   };
 
@@ -677,7 +790,7 @@ export default function Home() {
       case 'idle':
         return 'Ready to generate summary';
       case 'processing':
-        return 'Processing transcript...';
+        return isRecording ? 'Processing transcript...' : 'Finalizing transcription...';
       case 'summarizing':
         return 'Generating AI summary...';
       case 'regenerating':
@@ -1063,6 +1176,14 @@ export default function Home() {
               />
             </div>
           </div>
+
+          {/* Processing status overlay */}
+          {summaryStatus === 'processing' && !isRecording && (
+            <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-10 bg-white rounded-lg shadow-lg px-4 py-2 flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+              <span className="text-sm text-gray-700">Finalizing transcription...</span>
+            </div>
+          )}
 
           {/* Model Settings Modal */}
           {showModelSettings && (
