@@ -64,7 +64,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
     Analytics.trackPageView('meeting_details');
   }, []);
 
+  // Combined effect to fetch both model and transcript configs
   useEffect(() => {
+    // Set default configurations
     setModelConfig({
       provider: 'ollama',
       model: 'llama3.2:latest',
@@ -89,26 +91,31 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   }, [modelConfig]);
 
   useEffect(() => {
+
     setTranscriptModelConfig({
       provider: 'localWhisper',
       model: 'large-v3',
     });
-    const fetchTranscriptSettings = async () => {
+
+    const fetchConfigurations = async () => {
+      // Only make API call if serverAddress is loaded
+      if (!serverAddress) {
+        console.log('Waiting for server address to load before fetching configurations');
+        return;
+      }
+      
       try {
         const data = await invokeTauri('api_get_transcript_config', {}) as any;
         if (data && data.provider !== null) {
           setTranscriptModelConfig(data);
         }
       } catch (error) {
-        console.error('Failed to fetch transcript settings:', error);
+        console.error('Failed to fetch configurations:', error);
       }
     };
-    fetchTranscriptSettings();
-  }, [serverAddress]);
 
-  useEffect(() => {
-    console.log('Transcript settings:', transcriptModelConfig);
-  }, [transcriptModelConfig]);
+    fetchConfigurations();
+  }, [serverAddress]);
 
   // // Reset settings save success after showing toast
   // useEffect(() => {

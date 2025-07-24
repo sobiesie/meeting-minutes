@@ -29,25 +29,27 @@ export default function MeetingDetails() {
   const [meetingSummary, setMeetingSummary] = useState<Summary|null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset states when currentMeeting changes
+  // Combined effect to handle meeting data fetching and state management
   useEffect(() => {
+    // Reset states when currentMeeting changes
     setMeetingDetails(null);
     setMeetingSummary(null);
     setError(null);
-  }, [currentMeeting?.id]);
 
-  useEffect(() => {
     if (!currentMeeting?.id || currentMeeting.id === 'intro-call') {
       setError("No meeting selected");
       Analytics.trackPageView('meeting_details');
       return;
     }
 
-    setMeetingDetails(null);
-    setMeetingSummary(null);
-    setError(null);
+    // Create AbortController for request cancellation
+    const abortController = new AbortController();
+    let isActive = true;
 
-    const fetchMeetingDetails = async () => {
+    const fetchMeetingData = async () => {
+      let detailsResponse: PromiseSettledResult<Response> | undefined;
+      let summaryResponse: PromiseSettledResult<Response> | undefined;
+      
       try {
         const data = await invoke('api_get_meeting', {
           meetingId: currentMeeting.id,
@@ -81,14 +83,31 @@ export default function MeetingDetails() {
         }, {} as Summary);
         setMeetingSummary(formattedSummary);
       } catch (error) {
-        console.error('Error fetching meeting summary:', error);
-        // Don't set error state for summary fetch failure, just use sample summary
-        setMeetingSummary(sampleSummary);
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('Request aborted');
+          return;
+        }
+        console.error('Error fetching meeting data:', error);
+        if (isActive) {
+          // Only set error for critical failures (meeting details), not summary failures
+          if (detailsResponse && (detailsResponse.status === 'rejected' || 
+              (detailsResponse.status === 'fulfilled' && !detailsResponse.value.ok))) {
+            setError("Failed to load meeting details");
+          } else {
+            // Meeting details loaded successfully, just log summary issue
+            console.log('Meeting details loaded, but summary fetch failed - this is acceptable');
+          }
+        }
       }
     };
 
-    fetchMeetingDetails();
-    fetchMeetingSummary();
+    fetchMeetingData();
+
+    // Cleanup function
+    return () => {
+      isActive = false;
+      abortController.abort();
+    };
   }, [currentMeeting?.id, serverAddress]);
 
   // if (error) {

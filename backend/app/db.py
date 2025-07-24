@@ -427,7 +427,14 @@ class DatabaseManager:
         async with self._get_connection() as conn:
             cursor = await conn.execute("SELECT provider, model FROM transcript_settings")
             row = await cursor.fetchone()
-            return dict(zip([col[0] for col in cursor.description], row)) if row else None
+            if row:
+                return dict(zip([col[0] for col in cursor.description], row))
+            else:
+                # Return default configuration if no transcript settings exist
+                return {
+                    "provider": "localWhisper",
+                    "model": "large-v3"
+                }
 
     async def save_transcript_config(self, provider: str, model: str):
         """Save the transcript settings"""

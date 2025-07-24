@@ -72,13 +72,7 @@ node_modules/
 *.njsproj
 *.sln
 *.sw?
-# OS specific
-# Task files
-# tasks.json
-# tasks/
-# .cursor/
-# .taskmaster/
-# .roo/
-# .roomodes
-# .windsurfrules
+experiments/
+.cursor/
+
 
