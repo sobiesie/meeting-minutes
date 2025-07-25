@@ -11,11 +11,19 @@ interface LogoProps {
 const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, ref) => {
   return (
     <Dialog aria-describedby={undefined}>
-      <DialogTrigger asChild>
-        <button ref={ref} className="flex items-center justify-start mb-2 cursor-pointer bg-transparent border-none p-0 hover:opacity-80 transition-opacity">
-          <Image src={isCollapsed ? "/logo-collapsed.png" : "/logo.png"} alt="Logo" width={isCollapsed ? 40 : 125} height={isCollapsed ? 32 : 100} />
-        </button>
-      </DialogTrigger>
+      {isCollapsed ? (
+        <DialogTrigger asChild>
+          <button ref={ref} className="flex items-center justify-start mb-2 cursor-pointer bg-transparent border-none p-0 hover:opacity-80 transition-opacity">
+            <Image src="/logo-collapsed.png" alt="Logo" width={40} height={32} />
+          </button>
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger asChild>
+          <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center cursor-pointer hover:opacity-80 transition-opacity">
+            <span>Meetily</span>
+          </span>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <VisuallyHidden>
           <DialogTitle>About Meetily</DialogTitle>
