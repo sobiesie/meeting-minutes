@@ -1,5 +1,6 @@
 use crate::audio_processing::write_audio_to_file;
 use crate::deepgram::transcribe_with_deepgram;
+use crate::groq::transcribe_with_groq;
 use crate::pyannote::models::{get_or_download_model, PyannoteModel};
 use crate::pyannote::segment::SpeechSegment;
 use crate::{resample, DeviceControl};
@@ -77,27 +78,31 @@ pub async fn stt(
     let mut mel_filters = vec![0f32; mel_bytes.len() / 4];
     <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(mel_bytes, &mut mel_filters);
 
-    let transcription: Result<String> = if audio_transcription_engine
-        == AudioTranscriptionEngine::Deepgram.into()
-    {
+    let transcription: Result<String> = if audio_transcription_engine == AudioTranscriptionEngine::Deepgram.into() {
         // Deepgram implementation
         let api_key = deepgram_api_key.unwrap_or_default();
 
-        match transcribe_with_deepgram(&api_key, audio, device, sample_rate, languages.clone())
-            .await
-        {
-            Ok(transcription) => Ok(transcription),
+        match transcribe_with_deepgram(&api_key, audio, device, sample_rate, languages.clone()).await {
+            Ok(t) => Ok(t),
             Err(e) => {
-                error!(
-                    "device: {}, deepgram transcription failed, falling back to Whisper: {:?}",
-                    device, e
-                );
+                error!("device: {}, deepgram transcription failed, falling back to Whisper: {:?}", device, e);
                 // Fallback to Whisper
                 process_with_whisper(&mut *whisper_model, audio, &mel_filters, languages.clone())
             }
         }
+    } else if audio_transcription_engine == AudioTranscriptionEngine::WhisperLargeV3Turbo.into() {
+        // Groq Whisper Large v3 Turbo implementation
+        let api_key = std::env::var("GROQ_API_KEY").unwrap_or_default();
+
+        match transcribe_with_groq(&api_key, audio, sample_rate, languages.clone()).await {
+            Ok(t) => Ok(t),
+            Err(e) => {
+                error!("device: {}, Groq transcription failed, falling back to local Whisper: {:?}", device, e);
+                process_with_whisper(&mut *whisper_model, audio, &mel_filters, languages.clone())
+            }
+        }
     } else {
-        // Existing Whisper implementation
+        // Local Whisper implementation
         process_with_whisper(&mut *whisper_model, audio, &mel_filters, languages)
     };
 
