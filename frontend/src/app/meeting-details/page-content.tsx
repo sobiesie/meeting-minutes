@@ -73,15 +73,16 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           model: modelConfig.provider,
           model_name: modelConfig.model,
           meeting_id: meeting.id,
-          chunk_size: 40000,
+          chunk_size: 15000,
           overlap: 1000
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Process transcript failed:', errorData);
-        setSummaryError(errorData.error || 'Failed to process transcript');
+        const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${response.status}`;
+        console.error('Process transcript failed:', detailedError);
+        setSummaryError(`Transcript processing failed: ${detailedError}`);
         setSummaryStatus('error');
         return;
       }
@@ -96,8 +97,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
-            console.error('Get summary failed:', errorData);
-            setSummaryError(errorData.error || 'Unknown error');
+            const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${statusResponse.status}`;
+            console.error('Get summary failed:', detailedError);
+            setSummaryError(`Failed to get summary status: ${detailedError}`);
             setSummaryStatus('error');
             clearInterval(pollInterval);
             return;
@@ -229,15 +231,16 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           model: modelConfig.provider,
           model_name: modelConfig.model,
           meeting_id: meeting.id,
-          chunk_size: 40000,
+          chunk_size: 15000,
           overlap: 1000
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Process transcript failed:', errorData);
-        throw new Error(errorData.error || 'Failed to process transcript');
+        const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${response.status}`;
+        console.error('Process transcript failed:', detailedError);
+        throw new Error(detailedError || 'Failed to process transcript');
       }
 
       const { process_id } = await response.json();
@@ -249,8 +252,9 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           const statusResponse = await fetch(`http://localhost:5167/get-summary/${process_id}`);
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
-            console.error('Get summary failed:', errorData);
-            throw new Error(errorData.error || 'Failed to get summary status');
+            const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${statusResponse.status}`;
+            console.error('Get summary failed:', detailedError);
+            throw new Error(detailedError || 'Failed to get summary status');
           }
 
           const result = await statusResponse.json();
