@@ -64,7 +64,7 @@ export default function Home() {
   const [error, setError] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
 
-  const { setCurrentMeeting, setMeetings ,meetings, isMeetingActive, setIsMeetingActive} = useSidebar();
+  const { currentMeeting, setCurrentMeeting, setMeetings ,meetings, isMeetingActive, setIsMeetingActive} = useSidebar();
   const handleNavigation = useNavigation('', ''); // Initialize with empty values
   const router = useRouter();
 
@@ -436,6 +436,10 @@ export default function Home() {
       
       console.log('Generating summary for transcript length:', fullTranscript.length);
       
+      // Always send a meeting_id to the backend – fall back to a temporary one if we do not yet
+      // have a saved meeting in the sidebar state.
+      const meetingIdForSummary = currentMeeting?.id || `temp-${Date.now()}`;
+
       // Process transcript and get process_id
       console.log('Processing transcript...');
       const response = await fetch('http://localhost:5167/process-transcript', {
@@ -445,15 +449,17 @@ export default function Home() {
           text: fullTranscript,
           model: modelConfig.provider,
           model_name: modelConfig.model,
-          chunk_size: 40000,
+          meeting_id: meetingIdForSummary,
+          chunk_size: 15000, // keep chunks comfortably within typical 8-16k token budgets
           overlap: 1000
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Process transcript failed:', errorData);
-        setSummaryError(errorData.error || 'Failed to process transcript');
+        const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${response.status}`;
+        console.error('Process transcript failed:', detailedError);
+        setSummaryError(`Transcript processing failed: ${detailedError}`);
         setSummaryStatus('error');
         return;
       }
@@ -469,8 +475,9 @@ export default function Home() {
           
           if (!statusResponse.ok) {
             const errorData = await statusResponse.json();
-            console.error('Get summary failed:', errorData);
-            setSummaryError(errorData.error || 'Unknown error');
+            const detailedError = errorData.error || errorData.detail || errorData.message || `HTTP ${statusResponse.status}`;
+            console.error('Get summary failed:', detailedError);
+            setSummaryError(`Failed to get summary status: ${detailedError}`);
             setSummaryStatus('error');
             clearInterval(pollInterval);
             return;
@@ -538,7 +545,7 @@ export default function Home() {
       }
       setSummaryStatus('error');
     }
-  }, [transcripts, modelConfig]);
+  }, [transcripts, modelConfig, currentMeeting]);
 
   const handleSummary = useCallback((summary: any) => {
     setAiSummary(summary);
