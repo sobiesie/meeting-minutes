@@ -5,6 +5,7 @@ export interface ModelConfig {
   model: string;
   whisperModel: string;
   apiKey?: string | null;
+  hasApiKey?: boolean;
 }
 
 interface OllamaModel {
@@ -44,7 +45,9 @@ export function ModelSettingsModal({
           const data = await response.json();
           if (data.provider !== null) {
             setModelConfig(data);
-            setApiKey(data.apiKey || '');
+            // Never set an API key from server response
+            setApiKey('');
+            setIsApiKeyLocked(true);
           }
         } catch (error) {
           console.error('Failed to fetch model config:', error);
@@ -54,28 +57,6 @@ export function ModelSettingsModal({
       fetchModelConfig();
     }
   }, [showModelSettings]);
-
-  const fetchApiKey = async (provider: string) => {
-    try {
-      const response = await fetch('http://localhost:5167/get-api-key', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ provider }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setApiKey(data || '');
-    } catch (err) {
-      console.error('Error fetching API key:', err);
-      setApiKey('');
-    }
-  };
 
   const modelOptions = {
     ollama: models.map(model => model.name),
@@ -108,7 +89,7 @@ export function ModelSettingsModal({
   };
 
   const requiresApiKey = modelConfig.provider === 'claude' || modelConfig.provider === 'groq' || modelConfig.provider === 'openai';
-  const isDoneDisabled = requiresApiKey && !apiKey.trim();
+  const isDoneDisabled = requiresApiKey && !(apiKey.trim() || modelConfig.hasApiKey);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -154,9 +135,26 @@ export function ModelSettingsModal({
   };
 
   const handleSave = () => {
-    const updatedConfig = { ...modelConfig, apiKey: apiKey.trim() };
+    // Only include apiKey if user unlocked the field
+    let apiKeyToSend: string | undefined = undefined;
+    if (!isApiKeyLocked) {
+      const trimmed = apiKey.trim();
+      // If user cleared the field and a key exists, send empty string to delete
+      if (trimmed === '' && modelConfig.hasApiKey) {
+        apiKeyToSend = '';
+      } else if (trimmed !== '') {
+        apiKeyToSend = trimmed;
+      }
+    }
+
+    const updatedConfig: ModelConfig = { ...modelConfig };
+    if (apiKeyToSend !== undefined) {
+      updatedConfig.apiKey = apiKeyToSend;
+    } else {
+      delete (updatedConfig as any).apiKey;
+    }
+
     setModelConfig(updatedConfig);
-    console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
     setShowModelSettings(false);
     onSave(updatedConfig);
   };
@@ -201,7 +199,9 @@ export function ModelSettingsModal({
                     provider,
                     model: modelOptions[provider][0]
                   });
-                  fetchApiKey(provider);
+                  // Do not fetch API keys from server; clear local input
+                  setApiKey('');
+                  setIsApiKeyLocked(true);
                 }}
               >
                 <option value="claude">Claude</option>
@@ -238,15 +238,13 @@ export function ModelSettingsModal({
                   className={`w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-24 ${
                     isApiKeyLocked ? 'bg-gray-100 cursor-not-allowed' : ''
                   }`}
-                  placeholder="Enter your API key"
+                  placeholder={modelConfig.hasApiKey ? "API key saved (hidden)" : "Enter your API key"}
                 />
                 {isApiKeyLocked && (
                   <div 
                     onClick={handleInputClick}
                     className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50 rounded-md cursor-not-allowed"
                   />
-                    
-                  
                 )}
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center space-x-2">
                   <button
@@ -318,12 +316,8 @@ export function ModelSettingsModal({
         <div className="mt-6 flex justify-end">
           <button
             onClick={handleSave}
+            className={`px-4 py-2 rounded-md text-white ${isDoneDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
             disabled={isDoneDisabled}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-              isDoneDisabled 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
           >
             Done
           </button>

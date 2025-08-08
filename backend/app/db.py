@@ -132,8 +132,8 @@ class DatabaseManager:
         now = datetime.utcnow().isoformat()
         
         async with self._get_connection() as conn:
-            update_fields = ["status = ?", "updated_at = ?"]
-            params = [status, now]
+            update_fields = ["status = ?"]
+            params = [status]
             
             if result:
                 update_fields.append("result = ?")
@@ -354,22 +354,18 @@ class DatabaseManager:
     async def save_model_config(self, provider: str, model: str, whisperModel: str):
         """Save the model configuration"""
         async with self._get_connection() as conn:
-            # Check if the configuration already exists
-            cursor = await conn.execute("SELECT id FROM settings")
-            existing_config = await cursor.fetchone()
-            if existing_config:
-                # Update existing configuration
-                await conn.execute("""
-                    UPDATE settings 
-                    SET provider = ?, model = ?, whisperModel = ?
-                    WHERE id = '1'    
-                """, (provider, model, whisperModel))
-            else:
-                # Insert new configuration
-                await conn.execute("""
-                    INSERT INTO settings (id, provider, model, whisperModel)
-                    VALUES (?, ?, ?, ?)
-                """, ('1', provider, model, whisperModel))
+            # Use UPSERT to ensure a single row with id='1'
+            await conn.execute(
+                """
+                INSERT INTO settings (id, provider, model, whisperModel)
+                VALUES ('1', ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    provider = excluded.provider,
+                    model = excluded.model,
+                    whisperModel = excluded.whisperModel
+                """,
+                (provider, model, whisperModel),
+            )
             await conn.commit()
 
 
@@ -378,16 +374,16 @@ class DatabaseManager:
         provider_list = ["openai", "claude", "groq", "ollama"]
         if provider not in provider_list:
             raise ValueError(f"Invalid provider: {provider}")
-        if provider == "openai":
-            api_key_name = "openaiApiKey"
-        elif provider == "claude":
-            api_key_name = "anthropicApiKey"
-        elif provider == "groq":
-            api_key_name = "groqApiKey"
-        elif provider == "ollama":
-            api_key_name = "ollamaApiKey"
+
         async with self._get_connection() as conn:
-            await conn.execute(f"UPDATE settings SET {api_key_name} = ? WHERE id = '1'", (api_key,))
+            if provider == "openai":
+                await conn.execute("UPDATE settings SET openaiApiKey = ? WHERE id = '1'", (api_key,))
+            elif provider == "claude":
+                await conn.execute("UPDATE settings SET anthropicApiKey = ? WHERE id = '1'", (api_key,))
+            elif provider == "groq":
+                await conn.execute("UPDATE settings SET groqApiKey = ? WHERE id = '1'", (api_key,))
+            elif provider == "ollama":
+                await conn.execute("UPDATE settings SET ollamaApiKey = ? WHERE id = '1'", (api_key,))
             await conn.commit()
 
     async def get_api_key(self, provider: str):
@@ -395,16 +391,16 @@ class DatabaseManager:
         provider_list = ["openai", "claude", "groq", "ollama"]
         if provider not in provider_list:
             raise ValueError(f"Invalid provider: {provider}")
-        if provider == "openai":
-            api_key_name = "openaiApiKey"
-        elif provider == "claude":
-            api_key_name = "anthropicApiKey"
-        elif provider == "groq":
-            api_key_name = "groqApiKey"
-        elif provider == "ollama":
-            api_key_name = "ollamaApiKey"
+
         async with self._get_connection() as conn:
-            cursor = await conn.execute(f"SELECT {api_key_name} FROM settings WHERE id = '1'")
+            if provider == "openai":
+                cursor = await conn.execute("SELECT openaiApiKey FROM settings WHERE id = '1'")
+            elif provider == "claude":
+                cursor = await conn.execute("SELECT anthropicApiKey FROM settings WHERE id = '1'")
+            elif provider == "groq":
+                cursor = await conn.execute("SELECT groqApiKey FROM settings WHERE id = '1'")
+            else:  # provider == "ollama"
+                cursor = await conn.execute("SELECT ollamaApiKey FROM settings WHERE id = '1'")
             row = await cursor.fetchone()
             return row[0] if row else None
         
@@ -413,16 +409,16 @@ class DatabaseManager:
         provider_list = ["openai", "claude", "groq", "ollama"]
         if provider not in provider_list:
             raise ValueError(f"Invalid provider: {provider}")
-        if provider == "openai":
-            api_key_name = "openaiApiKey"
-        elif provider == "claude":
-            api_key_name = "anthropicApiKey"
-        elif provider == "groq":
-            api_key_name = "groqApiKey"
-        elif provider == "ollama":
-            api_key_name = "ollamaApiKey"
+
         async with self._get_connection() as conn:
-            await conn.execute(f"UPDATE settings SET {api_key_name} = NULL WHERE id = '1'")
+            if provider == "openai":
+                await conn.execute("UPDATE settings SET openaiApiKey = NULL WHERE id = '1'")
+            elif provider == "claude":
+                await conn.execute("UPDATE settings SET anthropicApiKey = NULL WHERE id = '1'")
+            elif provider == "groq":
+                await conn.execute("UPDATE settings SET groqApiKey = NULL WHERE id = '1'")
+            else:  # provider == "ollama"
+                await conn.execute("UPDATE settings SET ollamaApiKey = NULL WHERE id = '1'")
             await conn.commit()
             
    

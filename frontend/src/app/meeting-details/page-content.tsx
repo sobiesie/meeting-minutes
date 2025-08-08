@@ -46,7 +46,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   }, []);
 
   useEffect(() => {
-    console.log('Model config:', modelConfig);
+    // Avoid logging full model config to prevent accidental leaks
   }, [modelConfig]);
 
   const generateAISummary = useCallback(async () => {
@@ -61,10 +61,7 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
       setOriginalTranscript(fullTranscript);
       
-      console.log('Generating summary for transcript length:', fullTranscript.length);
-      
       // Process transcript and get process_id
-      console.log('Processing transcript...');
       const response = await fetch('http://localhost:5167/process-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +85,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       }
 
       const { process_id } = await response.json();
-      console.log('Process ID:', process_id);
 
       // Poll for summary status
       const pollInterval = setInterval(async () => {
@@ -106,7 +102,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
           }
 
           const result = await statusResponse.json();
-          console.log('Summary status:', result);
 
           if (result.status === 'error') {
             setSummaryError(result.error || 'Unknown error');
@@ -155,7 +150,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
             setSummaryStatus('completed');
           }
         } catch (error) {
-          console.error('Failed to get summary status:', error);
           if (error instanceof Error) {
             setSummaryError(`Failed to get summary status: ${error.message}`);
           } else {
@@ -170,7 +164,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
       // Cleanup interval on component unmount
       return () => clearInterval(pollInterval);
     } catch (error) {
-      console.error('Failed to generate summary:', error);
       if (error instanceof Error) {
         setSummaryError(`Failed to generate summary: ${error.message}`);
       } else {
@@ -359,7 +352,6 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
         meeting_id: meeting.id,
         title: meetingTitle
       };
-      console.log('Saving meeting title with payload:', payload);
       
       const response = await fetch('http://localhost:5167/save-meeting-title', {
         method: 'POST',
@@ -371,13 +363,10 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Save meeting title failed:', errorData);
-        console.error('Response status:', response.status);
         throw new Error(errorData.error || 'Failed to save meeting title');
       }
       
-      const responseData = await response.json();
-      console.log('Save meeting title success:', responseData);
+      await response.json();
       
       setMeetings((prev: CurrentMeeting[]) => prev.map(m => m.id === meeting.id ? { ...m, title: meetingTitle } : m));
       setCurrentMeeting({ id: meeting.id, title: meetingTitle });
@@ -394,13 +383,14 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
   const handleSaveModelConfig = async (updatedConfig?: ModelConfig) => {
     try {
       const configToSave = updatedConfig || modelConfig;
-      const payload = {
+      const payload: any = {
         provider: configToSave.provider,
         model: configToSave.model,
         whisperModel: configToSave.whisperModel,
-        apiKey: configToSave.apiKey ?? null
       };
-      console.log('Saving model config with payload:', payload);
+      if (typeof (configToSave as any).apiKey !== 'undefined') {
+        payload.apiKey = (configToSave as any).apiKey;
+      }
       
       const response = await fetch('http://localhost:5167/save-model-config', {
         method: 'POST',
@@ -412,22 +402,26 @@ export default function PageContent({ meeting, summaryData }: { meeting: any, su
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Save model config failed:', errorData);
-        console.error('Response status:', response.status);
         throw new Error(errorData.error || 'Failed to save model config');
       }
 
-      const responseData = await response.json();
-      console.log('Save model config success:', responseData);
+      await response.json();
 
-      setModelConfig(payload);
+      setModelConfig((prev) => {
+        const next: any = { ...prev, ...payload };
+        if (typeof payload.apiKey !== 'undefined') {
+          next.hasApiKey = Boolean(payload.apiKey);
+          delete next.apiKey; // do not keep raw key in state
+        }
+        return next;
+      });
     } catch (error) {
       console.error('Failed to save model config:', error);
       if (error instanceof Error) {
         setError(error.message);
       } else {
         setError('Failed to save model config: Unknown error');
-      } 
+      }
     }
   };
 
