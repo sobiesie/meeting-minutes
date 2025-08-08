@@ -11,17 +11,21 @@ import json
 from threading import Lock
 from transcript_processor import TranscriptProcessor
 import time
+import os
 
 # Load environment variables
 load_dotenv()
 
 # Configure logger with line numbers and function names
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# Use LOG_LEVEL env var (default to INFO)
+log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_name, logging.INFO)
+logger.setLevel(log_level)
 
 # Create console handler with formatting
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(log_level)
 
 # Create formatter with line numbers and function names
 formatter = logging.Formatter(
@@ -40,14 +44,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS
+# Configure CORS using env var ALLOWED_ORIGINS (comma-separated)
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],     # Allow all origins for testing
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],     # Allow all methods
-    allow_headers=["*"],     # Allow all headers
-    max_age=3600,            # Cache preflight requests for 1 hour
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=3600,
 )
 
 # Global database manager instance for meeting management endpoints
@@ -426,28 +432,39 @@ async def save_transcript(request: SaveTranscriptRequest):
 
 @app.get("/get-model-config")
 async def get_model_config():
-    """Get the current model configuration"""
+    """Get the current model configuration without exposing API keys"""
     model_config = await db.get_model_config()
-    api_key = await db.get_api_key(model_config["provider"])
-    if api_key != None:
-        model_config["apiKey"] = api_key
+    try:
+        api_key = await db.get_api_key(model_config["provider"]) if model_config else None
+        has_api_key = bool(api_key and api_key.strip())
+    except Exception:
+        has_api_key = False
+    if model_config is None:
+        return {}
+    # Do not include the actual apiKey
+    model_config["hasApiKey"] = has_api_key
+    if "apiKey" in model_config:
+        del model_config["apiKey"]
     return model_config
 
 @app.post("/save-model-config")
 async def save_model_config(request: SaveModelConfigRequest):
-    """Save the model configuration"""
+    """Save the model configuration. If apiKey is provided as a non-empty string, save it. If provided as an empty string, delete it. Do not echo keys back."""
     await db.save_model_config(request.provider, request.model, request.whisperModel)
-    if request.apiKey != None:
-        await db.save_api_key(request.apiKey, request.provider)
-    return {"status": "success", "message": "Model configuration saved successfully"}  
+    if request.apiKey is not None:
+        if request.apiKey.strip():
+            await db.save_api_key(request.apiKey, request.provider)
+        else:
+            await db.delete_api_key(request.provider)
+    return {"status": "success", "message": "Model configuration saved successfully"}
 
 class GetApiKeyRequest(BaseModel):
     provider: str
 
 @app.post("/get-api-key")
 async def get_api_key(request: GetApiKeyRequest):
-    """Get the API key for a given provider"""
-    return await db.get_api_key(request.provider)
+    """Deprecated: Do not expose API keys to clients."""
+    raise HTTPException(status_code=410, detail="Endpoint deprecated: API keys are not retrievable")
 
 
 

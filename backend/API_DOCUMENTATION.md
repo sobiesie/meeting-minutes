@@ -11,16 +11,18 @@
 ### Required Environment Variables
 Create a `.env` file in the backend directory with the following variables:
 ```env
-# API Keys
-ANTHROPIC_API_KEY=your_anthropic_api_key    # Required for Claude model
-GROQ_API_KEY=your_groq_api_key              # Optional, for Groq model
-
-# Database Configuration
-DB_PATH=./meetings.db                        # SQLite database path
+# API Keys (optional; can also be configured via UI without exposing them)
+# ANTHROPIC_API_KEY=your_anthropic_api_key    # Optional, for Claude
+# GROQ_API_KEY=your_groq_api_key              # Optional, for Groq
+# OPENAI_API_KEY=your_openai_api_key          # Optional, for OpenAI
 
 # Server Configuration
 HOST=0.0.0.0                                # Server host
 PORT=5167                                   # Server port
+
+# CORS and Logging
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+LOG_LEVEL=INFO
 
 # Processing Configuration
 CHUNK_SIZE=5000                             # Default chunk size for processing
@@ -72,10 +74,10 @@ backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # Main FastAPI application
-│   ├── db.py               # Database operations
+│   ├── db.py                # Database operations
 │   └── transcript_processor.py.py # Transcript processing logic
 ├── requirements.txt         # Python dependencies
-└── meeting_minutes.db             # SQLite database
+└── meeting_minutes.db       # SQLite database
 ```
 
 ## Overview
@@ -87,7 +89,7 @@ http://localhost:5167
 ```
 
 ## Authentication
-Currently, no authentication is required for API endpoints.
+Currently, no authentication is required for API endpoints. For production, add authentication and further restrict CORS.
 
 ## Endpoints
 
@@ -105,7 +107,7 @@ Process a transcript text directly.
     "model": "string",          // Required: AI model to use (e.g., "ollama")
     "model_name": "string",     // Required: Model version (e.g., "qwen2.5:14b")
     "chunk_size": 40000,         // Optional: Size of text chunks (default: 80000)
-    "overlap": 1000             // Optional: Overlap between chunks (default: 1000)
+    "overlap": 1000              // Optional: Overlap between chunks (default: 1000)
 }
 ```
 
@@ -117,31 +119,7 @@ Process a transcript text directly.
 }
 ```
 
-### 2. Upload Transcript
-Upload and process a transcript file. This endpoint provides the same functionality as `/process-transcript` but accepts a file upload instead of raw text.
-
-**Endpoint:** `/upload-transcript`  
-**Method:** POST  
-**Content-Type:** `multipart/form-data`
-
-#### Request Parameters
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| file | File | Yes | The transcript file to upload |
-| model | String | No | AI model to use (default: "claude") |
-| model_name | String | No | Specific model version (default: "claude-3-5-sonnet-latest") |
-| chunk_size | Integer | No | Size of text chunks (default: 5000) |
-| overlap | Integer | No | Overlap between chunks (default: 1000) |
-
-#### Response
-```json
-{
-    "process_id": "string",
-    "message": "Processing started"
-}
-```
-
-### 3. Get Summary
+### 2. Get Summary
 Retrieve the generated summary for a specific process.
 
 **Endpoint:** `/get-summary/{process_id}`  
@@ -161,54 +139,36 @@ Retrieve the generated summary for a specific process.
 | 404 | Not Found - Process ID not found |
 | 500 | Internal Server Error - Server-side error |
 
-#### Response Body
+### 3. Model Configuration
+Get and save the model configuration. API keys are never returned by the server.
+
+- Get model config
+  - Endpoint: `/get-model-config`  
+  - Method: GET
+  - Response example:
 ```json
 {
-    "status": "string",       // "completed", "processing", "error"
-    "meetingName": "string",  // Name of the meeting (null if not available)
-    "process_id": "string",   // Process ID
-    "data": {                 // Summary data (null if not completed)
-        "MeetingName": "string",
-        "SectionSummary": {
-            "title": "string",
-            "blocks": [
-                {
-                    "id": "string",
-                    "type": "string",
-                    "content": "string",
-                    "color": "string"
-                }
-            ]
-        },
-        "CriticalDeadlines": {
-            "title": "string",
-            "blocks": []
-        },
-        "KeyItemsDecisions": {
-            "title": "string",
-            "blocks": []
-        },
-        "ImmediateActionItems": {
-            "title": "string",
-            "blocks": []
-        },
-        "NextSteps": {
-            "title": "string",
-            "blocks": []
-        },
-        "OtherImportantPoints": {
-            "title": "string",
-            "blocks": []
-        },
-        "ClosingRemarks": {
-            "title": "string",
-            "blocks": []
-        }
-    },
-    "start": "string",      // Start time in ISO format (null if not started)
-    "end": "string",        // End time in ISO format (null if not completed)
-    "error": "string"       // Error message if status is "error"
+  "provider": "openai",
+  "model": "gpt-4o",
+  "whisperModel": "large-v3",
+  "hasApiKey": true
 }
+```
+
+- Save model config
+  - Endpoint: `/save-model-config`  
+  - Method: POST  
+  - Body example:
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "whisperModel": "large-v3",
+  "apiKey": "sk-..."           // Optional: include to set; empty string to delete; omit to keep unchanged
+}
+```
+
+- The `/get-api-key` endpoint is deprecated and removed. API keys are not retrievable.
 
 ## Data Models
 
