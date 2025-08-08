@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 // Declare audio module
 pub mod audio;
 pub mod ollama;
+pub mod groq;
+pub mod deepgram;
 
 use audio::{
     default_input_device, default_output_device, AudioStream,
